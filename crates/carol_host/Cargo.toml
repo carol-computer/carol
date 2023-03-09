@@ -1,0 +1,15 @@
+[package]
+name = "carol_host"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasmtime = { workspace = true }
+bls12_381 = {  version = "0.7", features = ["experimental"] }
+sha2 = "0.9"
+reqwest = { version = "0.11", features = ["blocking"] }
+anyhow = "1"
+time = { version = "0.3", features = ["std", "serde-human-readable"] }
+rand = "0.8"

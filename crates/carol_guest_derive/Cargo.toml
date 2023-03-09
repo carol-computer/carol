@@ -1,0 +1,21 @@
+[package]
+name = "carol_guest_derive"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+syn = { version = "1", features = ["full"] }
+quote = "1"
+heck = "0.4"
+
+[dev-dependencies]
+bincode = { workspace = true }
+carol_guest = { workspace = true }
+serde = { workspace = true }
+rust-format = "0.3"

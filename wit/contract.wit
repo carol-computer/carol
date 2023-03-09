@@ -1,0 +1,26 @@
+interface http {
+   record response {
+       status: u16,
+       body: list<u8>
+   }
+   http-get: func(url: string) -> response
+}
+
+interface global {
+    bls-static-pubkey: func() -> list<u8>
+    bls-static-sign: func(message: list<u8>) -> list<u8>
+}
+
+interface log {
+    info: func(message: string)
+}
+
+default world run-contract {
+  import http: self.http
+  import global: self.global
+  import log: self.log
+
+  export contract: interface {
+      run: func(contract-params: list<u8>, exec-input: list<u8>) -> list<u8>
+  }
+}

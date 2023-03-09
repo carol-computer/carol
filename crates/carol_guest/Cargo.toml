@@ -1,0 +1,12 @@
+[package]
+name = "carol_guest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wit-bindgen = { workspace = true }
+bls12_381 = {  version = "0.7" }
+bincode = {  version = "2.0.0-rc.2", features = ["serde"] }
+carol_guest_derive = { workspace = true }

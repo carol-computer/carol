@@ -1,0 +1,24 @@
+[workspace]
+
+members = [
+    "example-crates/hello_world/client",
+    "example-crates/hello_world/guest",
+    "crates/carol_guest",
+    "crates/carol_host",
+    "crates/carol_guest_derive"
+]
+
+[workspace.package]
+edition = "2021"
+
+[workspace.dependencies]
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen.git", rev = "197d3be2d64e3d40c4e58ec42c255632f9e39486", features = ['default'] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "9141fcf8cf821d65dea75ee620f17023573f5c8d", features = ["component-model"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+bincode = {  version = "2.0.0-rc.2", features = ["serde"] }
+carol_guest = { path = "crates/carol_guest" }
+carol_host = { path = "crates/carol_host" }
+carol_guest_derive = { path = "crates/carol_guest_derive" }
+clap = "4"
+anyhow = "1"
