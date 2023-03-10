@@ -38,7 +38,7 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 &format!("derive"),
                 Span::call_site(),
             ))),
-            tokens: quote! { (bincode::Decode, bincode::Encode) },
+            tokens: quote! { (carol_guest::bincode::Decode, carol_guest::bincode::Encode) },
         }],
         vis: syn::Visibility::Public(VisPublic {
             pub_token: Token![pub](Span::call_site()),
@@ -127,7 +127,7 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 },
             };
 
-            let decode_call = quote! { bincode::encode_to_vec(#contract_call, bincode::config::standard()).unwrap() };
+            let decode_call = quote! { carol_guest::bincode::encode_to_vec(#contract_call, carol_guest::bincode::config::standard()).unwrap() };
 
             match_arms.push(Arm {
                 attrs: vec![],
@@ -161,8 +161,8 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
         impl carol_guest::contract::Contract for #self_ty {
             fn run(params: Vec<u8>, exec_input: Vec<u8>) -> Vec<u8> {
-                let (contract, _) = bincode::decode_from_slice::<#self_ty, _>(&params, bincode::config::standard()).unwrap();
-                let (method, _) = bincode::decode_from_slice::<#enum_name, _>(&exec_input, bincode::config::standard()).unwrap();
+                let (contract, _) = carol_guest::bincode::decode_from_slice::<#self_ty, _>(&params, carol_guest::bincode::config::standard()).unwrap();
+                let (method, _) = carol_guest::bincode::decode_from_slice::<#enum_name, _>(&exec_input, carol_guest::bincode::config::standard()).unwrap();
                 #match_stmt
             }
         }

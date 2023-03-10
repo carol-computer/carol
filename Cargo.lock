@@ -95,6 +95,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "bitmex_guest"
+version = "0.1.0"
+dependencies = [
+ "bincode 2.0.0-rc.2",
+ "carol_guest",
+ "serde",
+ "serde_json",
+ "time",
+ "url",
+]
+
+[[package]]
+name = "bitmex_run"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode 2.0.0-rc.2",
+ "bitmex_guest",
+ "carol_host",
+]
+
+[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -706,7 +728,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello_world_client"
+name = "hello_world_run"
 version = "0.1.0"
 dependencies = [
  "anyhow",

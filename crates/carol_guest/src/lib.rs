@@ -1,3 +1,4 @@
+pub use bincode;
 use bincode::{de::read::Reader, enc::write::Writer, impl_borrow_decode};
 pub use bls12_381;
 pub use carol_guest_derive::carol_contract;

@@ -1,0 +1,14 @@
+[package]
+name = "bitmex_guest"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+carol_guest = { workspace = true }
+bincode = { workspace = true }
+time = { version = "0.3", features = ["std", "serde-human-readable"] }
+url = "2"
+serde_json = "1"
+serde = {  version = "1", features = ["derive"] }

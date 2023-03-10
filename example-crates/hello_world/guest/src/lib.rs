@@ -4,7 +4,6 @@
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
-
 use carol_guest::*;
 
 set_contract!(HelloWorld);

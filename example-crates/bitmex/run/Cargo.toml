@@ -1,0 +1,10 @@
+[package]
+name = "bitmex_run"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+carol_host = { workspace = true }
+anyhow = { workspace = true }
+bitmex_guest = { path = "../guest" }
+bincode = { workspace = true }
