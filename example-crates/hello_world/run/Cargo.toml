@@ -10,3 +10,4 @@ carol_host = { workspace = true }
 anyhow = { workspace = true }
 hello_world = { path = "../guest" }
 bincode = { workspace = true }
+tokio = { version = "1", features = ["full"] }

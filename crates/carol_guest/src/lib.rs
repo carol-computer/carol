@@ -58,7 +58,12 @@ pub mod global {
 pub mod http {
     use super::raw;
     pub fn http_get(url: &str) -> raw::http::Response {
-        raw::http::http_get(url)
+        raw::http::execute(raw::http::Request {
+            body: &[],
+            headers: &[],
+            method: raw::http::Method::Get,
+            uri: url,
+        })
     }
 }
 

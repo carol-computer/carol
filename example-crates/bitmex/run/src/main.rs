@@ -3,7 +3,8 @@ use bitmex_guest::{
 };
 use carol_host::Executor;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let exec = Executor::new();
     let contract = exec.load_contract_from_file("target/bitmex_guest.wasm")?;
     let index = Index::BXBT;
@@ -18,9 +19,10 @@ fn main() -> anyhow::Result<()> {
         bincode::config::standard(),
     )
     .unwrap();
+    let output = exec.execute_contract(contract, instance, call).await?;
 
     let result = bincode::decode_from_slice::<Result<AttestIndexPrice, String>, _>(
-        exec.execute_contract(contract, instance, call)?.as_ref(),
+        &output,
         bincode::config::standard(),
     )?
     .0;

@@ -160,7 +160,7 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let output = quote! {
 
         impl carol_guest::contract::Contract for #self_ty {
-            fn run(params: Vec<u8>, exec_input: Vec<u8>) -> Vec<u8> {
+            fn activate(params: Vec<u8>, exec_input: Vec<u8>) -> Vec<u8> {
                 let (contract, _) = carol_guest::bincode::decode_from_slice::<#self_ty, _>(&params, carol_guest::bincode::config::standard()).unwrap();
                 let (method, _) = carol_guest::bincode::decode_from_slice::<#enum_name, _>(&exec_input, carol_guest::bincode::config::standard()).unwrap();
                 #match_stmt

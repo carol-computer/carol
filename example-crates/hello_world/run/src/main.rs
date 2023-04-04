@@ -1,7 +1,8 @@
 use carol_host::Executor;
 use hello_world::HelloWorldMethods;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let exec = Executor::new();
     let contract = exec.load_contract_from_file("target/hello_world.wasm")?;
 
@@ -13,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    exec.execute_contract(contract, vec![], call)?;
+    exec.execute_contract(contract, vec![], call).await?;
 
     Ok(())
 }

@@ -1,9 +1,23 @@
 interface http {
-   record response {
-       status: u16,
-       body: list<u8>
-   }
-   http-get: func(url: string) -> response
+    enum method {
+       get,
+       post,
+       put,
+       delete
+    }
+    record request {
+         method: method,
+         uri: string,
+         headers: list<tuple<string,string>>,
+         body: list<u8>,
+    }
+
+    record response {
+        headers: list<tuple<string,string>>,
+        body: list<u8>,
+        status: u16
+    }
+    execute: func(request: request) -> response
 }
 
 interface global {
@@ -16,11 +30,12 @@ interface log {
 }
 
 default world run-contract {
-  import http: self.http
-  import global: self.global
-  import log: self.log
+    import http: self.http
+    import global: self.global
+    import log: self.log
 
-  export contract: interface {
-      run: func(contract-params: list<u8>, exec-input: list<u8>) -> list<u8>
-  }
+    export contract: interface {
+        // use self.http.{request as http-request,response as http-response}
+        activate: func(contract-params: list<u8>, input: list<u8>) -> list<u8>
+    }
 }

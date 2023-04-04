@@ -18,6 +18,7 @@ pub struct Contract {
 impl Executor {
     pub fn new() -> Self {
         let mut config = Config::new();
+        config.async_support(true);
         config.wasm_component_model(true);
         let engine = Engine::new(&config).expect("valid config");
 
@@ -30,7 +31,7 @@ impl Executor {
         })
     }
 
-    pub fn execute_contract(
+    pub async fn execute_contract(
         &self,
         contract: Contract,
         contract_params: Vec<u8>,
@@ -47,6 +48,8 @@ impl Executor {
         let mut linker = Linker::new(&self.engine);
         RunContract::add_to_linker(&mut linker, |state: &mut Host| state)?;
 
+        struct Handler {}
+
         // // As with the core wasm API of Wasmtime instantiation occurs within a
         // // `Store`. The bindings structure contains an `instantiate` method which
         // // takes the store, component, and linker. This returns the `bindings`
@@ -57,15 +60,26 @@ impl Executor {
             Host {
                 bls_keypair: BlsKeyPair::random(&mut rand::thread_rng()),
                 contract_id: [0u8; 32],
+                http_client: reqwest::Client::new(),
             },
         );
-        let (bindings, _) = RunContract::instantiate(&mut store, &contract.component, &linker)?;
+        // #[async_trait]
+        // impl CallHookHandler<Host> for Handler {
+        //     async fn handle_call_event(&self, t: &mut Host, ch: wasmtime::CallHook) -> anyhow::Result<()> {
+        //         dbg!(&ch);
+        //         Ok(())
+        //     }
+        // }
+        // store.call_hook_async(Handler {});
+        let (bindings, _) =
+            RunContract::instantiate_async(&mut store, &contract.component, &linker).await?;
 
         // // Here our `greet` function doesn't take any parameters for the component,
         // // but in the Wasmtime embedding API the first argument is always a `Store`.
         let output = bindings
             .contract()
-            .call_run(&mut store, &contract_params, &exec_args)?;
+            .call_activate(&mut store, &contract_params, &exec_args)
+            .await?;
 
         Ok(output)
     }

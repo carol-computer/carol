@@ -1,3 +1,4 @@
+use carol_guest::contract::Contract;
 use carol_guest_derive::carol_contract;
 
 #[derive(bincode::Encode, bincode::Decode)]
@@ -16,11 +17,10 @@ impl Foo {
 
 #[test]
 fn call_add() {
-    use carol_guest::contract::Contract;
     let method = FooMethods::Add { lhs: 7, rhs: 3 };
     let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
     let foo = Foo;
-    let output = Foo::run(
+    let output = Foo::activate(
         bincode::encode_to_vec(foo, bincode::config::standard()).unwrap(),
         call,
     );
@@ -31,11 +31,10 @@ fn call_add() {
 
 #[test]
 fn call_sub() {
-    use carol_guest::contract::Contract;
     let method = FooMethods::CheckedSub { lhs: 7, rhs: 3 };
     let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
     let foo = Foo;
-    let output = Foo::run(
+    let output = Foo::activate(
         bincode::encode_to_vec(foo, bincode::config::standard()).unwrap(),
         call,
     );

@@ -8,3 +8,4 @@ carol_host = { workspace = true }
 anyhow = { workspace = true }
 bitmex_guest = { path = "../guest" }
 bincode = { workspace = true }
+tokio = { version = "1", features = ["full"] }
