@@ -2,12 +2,15 @@
 
 members = [
     "example-crates/hello_world/run",
+    "example-crates/hello_world/run_http",
     "example-crates/hello_world/guest",
     "example-crates/bitmex/guest",
     "example-crates/bitmex/run",
     "crates/carol_guest",
     "crates/carol_host",
-    "crates/carol_guest_derive"
+    "crates/carol_guest_derive",
+    "crates/carol_core",
+    "crates/carol",
 ]
 
 [workspace.package]
@@ -18,9 +21,13 @@ wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen.git", rev
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "9141fcf8cf821d65dea75ee620f17023573f5c8d", features = ["component-model"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
-bincode = {  version = "2.0.0-rc.2", features = ["serde"] }
+bincode = {  version = "2.0.0-rc.3", features = ["serde"] }
 carol_guest = { path = "crates/carol_guest" }
 carol_host = { path = "crates/carol_host" }
 carol_guest_derive = { path = "crates/carol_guest_derive" }
-clap = "4"
+carol = { path = "crates/carol" }
+carol_core =  { path = "crates/carol_core" }
+reqwest = {  version = "0.11.16", features = ["json"] }
+clap = {  version = "4", features = ["derive"] }
 anyhow = "1"
+futures-core = "0.3"

@@ -14,7 +14,11 @@ async fn main() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    exec.execute_contract(contract, vec![], call).await?;
+    let output = exec.execute_contract(contract, &[], &call).await?;
+    let (output, _): (&str, _) =
+        bincode::borrow_decode_from_slice(&output, bincode::config::standard())?;
+
+    println!("got response: {}", output);
 
     Ok(())
 }

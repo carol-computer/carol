@@ -31,11 +31,17 @@ impl Executor {
         })
     }
 
+    pub fn load_contract_from_binary(&self, binary: &[u8]) -> anyhow::Result<Contract> {
+        Ok(Contract {
+            component: Component::from_binary(&self.engine, binary)?,
+        })
+    }
+
     pub async fn execute_contract(
         &self,
         contract: Contract,
-        contract_params: Vec<u8>,
-        exec_args: Vec<u8>,
+        contract_params: &[u8],
+        activation_input: &[u8],
     ) -> anyhow::Result<Vec<u8>> {
         // Instantiation of bindings always happens through a `Linker`.
         // Configuration of the linker is done through a generated `add_to_linker`
@@ -78,7 +84,7 @@ impl Executor {
         // // but in the Wasmtime embedding API the first argument is always a `Store`.
         let output = bindings
             .contract()
-            .call_activate(&mut store, &contract_params, &exec_args)
+            .call_activate(&mut store, &contract_params, &activation_input)
             .await?;
 
         Ok(output)

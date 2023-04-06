@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
         bincode::config::standard(),
     )
     .unwrap();
-    let output = exec.execute_contract(contract, instance, call).await?;
+    let output = exec.execute_contract(contract, &instance, &call).await?;
 
     let result = bincode::decode_from_slice::<Result<AttestIndexPrice, String>, _>(
         &output,

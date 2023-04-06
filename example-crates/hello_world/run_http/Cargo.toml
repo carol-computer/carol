@@ -1,13 +1,15 @@
 [package]
-name = "hello_world_run"
+name = "hello_world_run_http"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { workspace = true }
 hello_world = { path = "../guest" }
 bincode = { workspace = true }
 tokio = { version = "1", features = ["full"] }
-carol_host = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+carol_core = { workspace = true }
+reqwest = { workspace = true }

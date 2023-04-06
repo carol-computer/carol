@@ -111,7 +111,7 @@ impl global::Host for Host {
 #[async_trait]
 impl log::Host for Host {
     async fn info(&mut self, message: String) -> anyhow::Result<()> {
-        println!("{}", message);
+        println!("INFO: {}", message);
         Ok(())
     }
 }

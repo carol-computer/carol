@@ -13,7 +13,9 @@ pub struct HelloWorld;
 
 #[carol_contract]
 impl HelloWorld {
-    pub fn say(&self, message: String) {
-        log::info(&format!("hello {}", message));
+    pub fn say(&self, message: String) -> String {
+        let response = format!("hello {}", message);
+        log::info(&response);
+        response
     }
 }
