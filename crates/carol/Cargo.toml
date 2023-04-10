@@ -11,7 +11,7 @@ hyper = { version = "0.14", features = ["server", "http2", "tcp", "http1"] }
 tokio = {  version = "1", features = ["full"] }
 serde = { workspace = true }
 serde_yaml = "0.9"
-tracing = "0.1"
+tracing = { workspace = true }
 clap = {  version = "4", features = ["derive"] }
 tracing-subscriber = "0.3"
 carol_host = { workspace = true }

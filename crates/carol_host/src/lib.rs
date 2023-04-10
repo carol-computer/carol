@@ -1,9 +1,13 @@
 use std::path::Path;
+use carol_core::MachineId;
+use sha2::{Sha256, Digest};
+use tracing::{info_span, Instrument};
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
 mod host_bindings;
-
-use host_bindings::{BlsKeyPair, Host, RunContract};
+use host_bindings::{BlsKeyPair, Host, Machine};
+use std::fs::File;
+use std::io::Read;
 
 #[derive(Clone)]
 pub struct Executor {
@@ -11,8 +15,9 @@ pub struct Executor {
 }
 
 #[derive(Clone)]
-pub struct Contract {
+pub struct CompiledMachine {
     component: Component,
+    binary_hash: [u8;32],
 }
 
 impl Executor {
@@ -25,24 +30,28 @@ impl Executor {
         Self { engine }
     }
 
-    pub fn load_contract_from_file(&self, file: impl AsRef<Path>) -> anyhow::Result<Contract> {
-        Ok(Contract {
-            component: Component::from_file(&self.engine, file)?,
-        })
+    pub fn load_machine_from_wasm_file(&self, file: impl AsRef<Path>) -> anyhow::Result<CompiledMachine> {
+        let mut f = File::open(file)?;
+        let mut binary = vec![];
+        f.read_to_end(&mut binary)?;
+        self.load_machine_from_wasm_binary(&binary)
     }
 
-    pub fn load_contract_from_binary(&self, binary: &[u8]) -> anyhow::Result<Contract> {
-        Ok(Contract {
+    pub fn load_machine_from_wasm_binary(&self, binary: &[u8]) -> anyhow::Result<CompiledMachine> {
+        let binary_hash = Sha256::default().chain(binary).finalize().into();
+        Ok(CompiledMachine {
             component: Component::from_binary(&self.engine, binary)?,
+            binary_hash,
         })
     }
 
-    pub async fn execute_contract(
+    pub async fn activate_machine(
         &self,
-        contract: Contract,
-        contract_params: &[u8],
+        machine: CompiledMachine,
+        machine_params: &[u8],
         activation_input: &[u8],
     ) -> anyhow::Result<Vec<u8>> {
+        let machine_id = MachineId::new(machine.binary_hash, machine_params);
         // Instantiation of bindings always happens through a `Linker`.
         // Configuration of the linker is done through a generated `add_to_linker`
         // method on the bindings structure.
@@ -52,10 +61,9 @@ impl Executor {
         // trait. In this case the `T`, `MyState`, is stored directly in the
         // structure so no projection is necessary here.
         let mut linker = Linker::new(&self.engine);
-        RunContract::add_to_linker(&mut linker, |state: &mut Host| state)?;
+        Machine::add_to_linker(&mut linker, |state: &mut Host| state)?;
 
         struct Handler {}
-
         // // As with the core wasm API of Wasmtime instantiation occurs within a
         // // `Store`. The bindings structure contains an `instantiate` method which
         // // takes the store, component, and linker. This returns the `bindings`
@@ -65,7 +73,7 @@ impl Executor {
             &self.engine,
             Host {
                 bls_keypair: BlsKeyPair::random(&mut rand::thread_rng()),
-                contract_id: [0u8; 32],
+                machine_id,
                 http_client: reqwest::Client::new(),
             },
         );
@@ -78,13 +86,15 @@ impl Executor {
         // }
         // store.call_hook_async(Handler {});
         let (bindings, _) =
-            RunContract::instantiate_async(&mut store, &contract.component, &linker).await?;
+            Machine::instantiate_async(&mut store, &machine.component, &linker).await?;
 
+        let span = info_span!("activation", machine_id = machine_id.to_string());
         // // Here our `greet` function doesn't take any parameters for the component,
         // // but in the Wasmtime embedding API the first argument is always a `Store`.
         let output = bindings
-            .contract()
-            .call_activate(&mut store, &contract_params, &activation_input)
+            .machine()
+            .call_activate(&mut store, &machine_params, &activation_input)
+            .instrument(span)
             .await?;
 
         Ok(output)

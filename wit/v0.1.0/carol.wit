@@ -29,13 +29,20 @@ interface log {
     info: func(message: string)
 }
 
-default world run-contract {
+world machine {
     import http: self.http
     import global: self.global
     import log: self.log
 
-    export contract: interface {
+    export machine: interface {
         // use self.http.{request as http-request,response as http-response}
-        activate: func(contract-params: list<u8>, input: list<u8>) -> list<u8>
+        activate: func(machine-params: list<u8>, input: list<u8>) -> list<u8>
     }
 }
+
+
+// world convert {
+//     export convert: interface {
+//         json-to-input: func(json: string) -> option<list<u8>>
+//     }
+// }

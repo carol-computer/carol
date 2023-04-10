@@ -14,3 +14,5 @@ anyhow = "1"
 time = { version = "0.3", features = ["std", "serde-human-readable"] }
 async-trait = "0.1"
 rand = "0.8"
+tracing = { workspace = true }
+carol_core = { workspace = true }

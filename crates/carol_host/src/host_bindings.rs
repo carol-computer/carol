@@ -2,16 +2,19 @@ use async_trait::async_trait;
 use rand::RngCore;
 use std::str::FromStr;
 use wasmtime::component::bindgen;
+use carol_core::MachineId;
+use tracing::{event, Level};
 
 bindgen!({
-    world: "contract",
-    path: "../../wit",
+    world: "carol.machine",
+    path: "../../wit/v0.1.0",
+    tracing: true,
     async: true,
 });
 
 pub struct Host {
     pub bls_keypair: BlsKeyPair,
-    pub contract_id: [u8; 32],
+    pub machine_id: MachineId,
     pub http_client: reqwest::Client,
 }
 
@@ -99,7 +102,7 @@ impl global::Host for Host {
         };
         let point = <G2Projective as HashToCurve<ExpandMsgXmd<sha2::Sha256>>>::hash_to_curve(
             message,
-            self.contract_id.as_ref(),
+            self.machine_id.as_ref(),
         );
 
         Ok(G2Affine::from(point * self.bls_keypair.sk)
@@ -111,7 +114,7 @@ impl global::Host for Host {
 #[async_trait]
 impl log::Host for Host {
     async fn info(&mut self, message: String) -> anyhow::Result<()> {
-        println!("INFO: {}", message);
+        event!(Level::DEBUG, message = message);
         Ok(())
     }
 }

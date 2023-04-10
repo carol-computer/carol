@@ -10,13 +10,18 @@ use syn::{
 };
 
 #[proc_macro_attribute]
-pub fn carol_contract(
-    _attr: proc_macro::TokenStream,
+pub fn carol(
+    attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let input = TokenStream::from(input);
-    let output = contract_inner(input);
-    proc_macro::TokenStream::from(output)
+    match attr.to_string().as_str() {
+        "" => {
+            let output = contract_inner(input);
+            proc_macro::TokenStream::from(output)
+        },
+        invalid => panic!("“{}” is not a valid carol interface", invalid)
+    }
 }
 
 fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
@@ -26,7 +31,7 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let ident = path.path.get_ident().unwrap().clone();
             Ident::new(&format!("{}Methods", ident), Span::call_site())
         }
-        _ => panic!("can only derive #[carol_contract] on a path"),
+        _ => panic!("can only derive #[carol] on a path"),
     };
 
     let mut call_interface_enum = ItemEnum {
@@ -159,7 +164,10 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let self_ty = input.self_ty.clone();
     let output = quote! {
 
-        impl carol_guest::contract::Contract for #self_ty {
+        #[cfg(not(test))]
+        carol_guest::set_machine!(#self_ty);
+
+        impl carol_guest::machine::Machine for #self_ty {
             fn activate(params: Vec<u8>, exec_input: Vec<u8>) -> Vec<u8> {
                 let (contract, _) = carol_guest::bincode::decode_from_slice::<#self_ty, _>(&params, carol_guest::bincode::config::standard()).unwrap();
                 let (method, _) = carol_guest::bincode::decode_from_slice::<#enum_name, _>(&exec_input, carol_guest::bincode::config::standard()).unwrap();
@@ -168,7 +176,6 @@ fn contract_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         }
 
         #call_interface_enum
-
 
         #input
     };

@@ -6,7 +6,7 @@ use carol_host::Executor;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let exec = Executor::new();
-    let contract = exec.load_contract_from_file("target/bitmex_guest.wasm")?;
+    let machine = exec.load_machine_from_wasm_file("target/bitmex_guest.wasm")?;
     let index = Index::BXBT;
 
     let instance =
@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
         bincode::config::standard(),
     )
     .unwrap();
-    let output = exec.execute_contract(contract, &instance, &call).await?;
+    let output = exec.activate_machine(machine, &instance, &call).await?;
 
     let result = bincode::decode_from_slice::<Result<AttestIndexPrice, String>, _>(
         &output,

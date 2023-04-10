@@ -30,11 +30,11 @@ async fn handle(mut req: Request<Body>) -> Result<Response<Body>, Infallible> {
                 bincode::config::standard(),
             ) {
                 Ok((binary_post, _)) => {
-                    match executor.load_contract_from_binary(binary_post.binary) {
-                        Ok(contract) => {
+                    match executor.load_machine_from_wasm_binary(binary_post.binary) {
+                        Ok(machine) => {
                             match executor
-                                .execute_contract(
-                                    contract,
+                                .activate_machine(
+                                    machine,
                                     binary_post.parameters,
                                     binary_post.activation_input,
                                 )

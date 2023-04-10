@@ -6,4 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bincode = { workspace = true }
+bincode = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+sha2 = "0.10"
+
+
+[features]
+default = [ "std", "bincode", "serde" ]
+std = ["alloc"]
+alloc = ["serde?/alloc", "bincode?/alloc"]

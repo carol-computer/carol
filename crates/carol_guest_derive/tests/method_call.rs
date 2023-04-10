@@ -1,10 +1,10 @@
-use carol_guest::contract::Contract;
-use carol_guest_derive::carol_contract;
+use carol_guest::machine::Machine;
+use carol_guest_derive::carol;
 
 #[derive(bincode::Encode, bincode::Decode)]
 pub struct Foo;
 
-#[carol_contract]
+#[carol]
 impl Foo {
     pub fn add(&self, lhs: u32, rhs: u32) -> u32 {
         lhs + rhs

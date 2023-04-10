@@ -4,7 +4,7 @@ use hello_world::HelloWorldMethods;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let exec = Executor::new();
-    let contract = exec.load_contract_from_file("target/hello_world.wasm")?;
+    let machine = exec.load_machine_from_wasm_file("target/hello_world.wasm")?;
 
     let call = bincode::encode_to_vec(
         &HelloWorldMethods::Say {
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    let output = exec.execute_contract(contract, &[], &call).await?;
+    let output = exec.activate_machine(machine, &[], &call).await?;
     let (output, _): (&str, _) =
         bincode::borrow_decode_from_slice(&output, bincode::config::standard())?;
 

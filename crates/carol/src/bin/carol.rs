@@ -24,7 +24,8 @@ pub async fn main() -> anyhow::Result<()> {
         serde_yaml::from_str(&content)
             .context(format!("{} is an invalid configuration file", file_name))?
     };
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
+
+    let subscriber = tracing_subscriber::fmt().with_max_level(Level::DEBUG).finish();
     // use that subscriber to process traces emitted after this point
     tracing::subscriber::set_global_default(subscriber)?;
     event!(Level::INFO, "starting carol");

@@ -1,16 +1,17 @@
 pub use bincode;
 use bincode::{de::read::Reader, enc::write::Writer, impl_borrow_decode};
 pub use bls12_381;
-pub use carol_guest_derive::carol_contract;
+pub use carol_guest_derive::carol;
 
 mod raw {
     wit_bindgen::generate!({
-        path: "../../wit",
-        world: "contract",
+        world: "carol.machine",
+        path: "../../wit/v0.1.0",
         macro_export,
-        export_macro_name: "set_contract"
+        export_macro_name: "set_machine"
     });
 }
+
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlsSignature(pub bls12_381::G2Affine);
@@ -69,4 +70,4 @@ pub mod http {
 
 #[cfg(target_arch = "wasm32")]
 pub use raw::__link_section;
-pub use raw::{contract, log};
+pub use raw::{machine, log};

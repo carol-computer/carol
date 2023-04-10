@@ -24,14 +24,12 @@ pub struct AttestMessage {
     pub index: Index,
 }
 
-set_contract!(BitMexAttest);
-
 #[derive(bincode::Decode, bincode::Encode)]
 pub struct BitMexAttest {
     pub index: Index,
 }
 
-#[carol_contract]
+#[carol]
 impl BitMexAttest {
     pub fn attest_to_price_at_minute(
         &self,
