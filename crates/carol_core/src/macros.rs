@@ -1,4 +1,3 @@
-
 /// Implements Display, FromStr, Serialize and Deserialize for something that
 /// can be represented as a fixed length byte array
 #[macro_export]
@@ -8,6 +7,17 @@ macro_rules! impl_fromstr_deserialize {
         name => $name:literal,
         fn from_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($input:ident : [u8;$len:literal]) ->  Option<$type:path> $block:block
     ) => {
+
+        impl$(<$($tpl $(:$tcl)?),*>)?  $type {
+            pub fn from_slice(slice: &[u8]) -> Option<$type> {
+                if slice.len() != $len {
+                    return None;
+                }
+                let mut $input = [0u8;$len];
+                $input.copy_from_slice(&slice[..]);
+                $block
+            }
+        }
 
         impl$(<$($tpl $(:$tcl)?),*>)? core::str::FromStr for $type  {
             type Err = $crate::hex::HexError;
@@ -34,14 +44,12 @@ macro_rules! impl_fromstr_deserialize {
             }
         }
 
-        #[cfg(feature = "serde")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
         impl<'de, $($($tpl $(: $tcl)?),*)?> $crate::serde::Deserialize<'de> for $type  {
             fn deserialize<Deser: $crate::serde::Deserializer<'de>>(
                 deserializer: Deser,
             ) -> Result<$type , Deser::Error> {
 
-                #[cfg(feature = "alloc")]
+
                 {
                     if deserializer.is_human_readable() {
                         #[allow(unused_parens)]
@@ -106,24 +114,18 @@ macro_rules! impl_fromstr_deserialize {
             }
         }
 
-        #[cfg(feature = "bincode")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
+
+
         impl$(<$($tpl $(:$tcl)?),*>)? $crate::bincode::de::Decode for $type {
-            fn decode<D: bincode::de::Decoder>(decoder: &mut D) -> Result<Self, $crate::bincode::error::DecodeError> {
-                use bincode::de::read::Reader;
+            fn decode<D: $crate::bincode::de::Decoder>(decoder: &mut D) -> Result<Self, $crate::bincode::error::DecodeError> {
+                use $crate::bincode::de::read::Reader;
                 let mut $input = [0u8; $len];
                 decoder.reader().read(&mut $input)?;
                 let result = $block;
-                #[cfg(feature = "alloc")]
                 return result.ok_or($crate::bincode::error::DecodeError::OtherString(format!("Invalid {}-byte encoding of a {}", $len, $name)));
-
-                #[cfg(not(feature = "alloc"))]
-                return result.ok_or($crate::bincode::error::DecodeError::Other($name))
             }
         }
 
-        #[cfg(feature = "bincode")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
         impl<'de, $($($tpl $(:$tcl)?),*)?> $crate::bincode::BorrowDecode<'de> for $type {
             fn borrow_decode<D: $crate::bincode::de::BorrowDecoder<'de>>(
                 decoder: &mut D,
@@ -134,20 +136,17 @@ macro_rules! impl_fromstr_deserialize {
     };
 }
 
-
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_display_serialize {
     (fn to_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($self:ident : &$type:path) -> $(&)?[u8;$len:literal] $block:block) => {
-        #[cfg(feature = "serde")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+
         impl$(<$($tpl $(:$tcl)?),*>)? $crate::serde::Serialize for $type {
             fn serialize<Ser: $crate::serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
                 use $crate::serde::ser::SerializeTuple;
                 let $self = &self;
                 let bytes = $block;
 
-                #[cfg(feature = "alloc")]
                 {
                     use $crate::hex;
                     if serializer.is_human_readable() {
@@ -176,11 +175,9 @@ macro_rules! impl_display_serialize {
             }
         }
 
-        #[cfg(feature = "bincode")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "bincode")))]
         impl$(<$($tpl $(:$tcl)?),*>)? $crate::bincode::Encode for $type {
             fn encode<E: $crate::bincode::enc::Encoder>(&self, encoder: &mut E) -> Result<(), $crate::bincode::error::EncodeError> {
-                use bincode::enc::write::Writer;
+                use $crate::bincode::enc::write::Writer;
                 let $self = &self;
                 let bytes = $block;
                 encoder.writer().write(bytes.as_ref())
@@ -238,7 +235,6 @@ macro_rules! impl_debug {
         $f.write_str($next)?;
     };
 }
-
 
 #[macro_export]
 #[doc(hidden)]

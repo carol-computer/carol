@@ -11,3 +11,6 @@ hello_world = { path = "../guest" }
 bincode = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 carol_host = { workspace = true }
+wasmtime = { workspace = true }
+rand = { workspace = true }
+carol_bls = { workspace = true }

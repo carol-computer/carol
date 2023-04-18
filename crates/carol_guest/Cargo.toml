@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 wit-bindgen = { workspace = true }
-bls12_381 = {  version = "0.7" }
-bincode = {  version = "2.0.0-rc.2", features = ["serde"] }
+carol_bls = { workspace = true }
+bincode = {  workspace = true }
 carol_guest_derive = { workspace = true }
-serde_json = "1"
+serde_json = { workspace = true }
+http = { version = "0.2", default-features = false }
+serde = { workspace = true }
+carol_core = { workspace = true }

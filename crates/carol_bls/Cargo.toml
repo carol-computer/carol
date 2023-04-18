@@ -1,16 +1,12 @@
 [package]
-name = "carol_core"
+name = "carol_bls"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bincode = { workspace = true }
-serde = { workspace = true }
+carol_core = { workspace = true }
+bls12_381 = { version = "0.8", features = ["experimental"] }
+rand_core = { workspace = true }
 sha2 = { workspace = true }
-
-
-[features]
-default = [ "std" ]
-std = []

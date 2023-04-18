@@ -2,61 +2,103 @@ use carol_guest::*;
 pub use time;
 
 #[derive(
-    Clone, Copy, Debug, serde::Deserialize, serde::Serialize, bincode::Encode, bincode::Decode,
+    Debug, Clone, Copy, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize,
 )]
-pub enum Index {
-    BXBT,
-}
-
-#[derive(Debug, Clone, Copy, bincode::Encode, bincode::Decode)]
-pub struct AttestIndexPrice {
+pub struct AttestIndexPrice<S> {
     pub price: u64,
-    pub signature: BlsSignature,
+    pub signature: S,
 }
 
-#[derive(Clone, Copy, Debug, bincode::Encode, bincode::Decode)]
-pub struct OffsetDateTime(#[bincode(with_serde)] pub time::OffsetDateTime);
+#[derive(
+    Clone, Copy, Debug, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize,
+)]
+pub struct OffsetDateTime(
+    #[bincode(with_serde)]
+    #[serde(with = "time::serde::iso8601")]
+    pub time::OffsetDateTime,
+);
 
-#[derive(Clone, Debug, bincode::Encode, bincode::Decode)]
+#[derive(Clone, Debug, bincode::Encode)]
 pub struct AttestMessage {
-    pub price: u64,
     pub time: OffsetDateTime,
-    pub index: Index,
+    pub price: u64,
+    pub symbol: String,
 }
 
 #[derive(bincode::Decode, bincode::Encode)]
-pub struct BitMexAttest {
-    pub index: Index,
+pub struct BitMexAttest;
+
+#[derive(bincode::Encode)]
+pub struct AttestBit<'a> {
+    pub symbol: &'a str,
+    pub time: OffsetDateTime,
+    pub n_bits: u8,
+    pub bit_value: bool,
 }
 
 #[carol]
 impl BitMexAttest {
+    /// Like [`Self::attest_to_price_at_minute`] but provides a BLS signature for every bit of the
+    /// price capped to `2^n_bits - 1`. This is for use in *[Cryptographic Oracle-Based Conditional
+    /// Payments]* like schemes.
+    ///
+    /// [Cryptographic Oracle-Based Conditional Payments]: https://eprint.iacr.org/2022/499
+    #[activate]
+    pub fn bit_decompose_attest_to_price_at_minute(
+        &self,
+        time: OffsetDateTime,
+        symbol: String,
+        n_bits: u8,
+    ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, String> {
+        let price = self.index_price_at_minute(&symbol, time)?;
+
+        let capped_price = price.min((1 << n_bits) - 1);
+        let signatures = (0..(n_bits as usize)).map(|bit_index| {
+            let bit_value = ((capped_price >> bit_index) & 0x01) == 1;
+            let attest_bit = AttestBit {
+                symbol: &symbol,
+                time,
+                n_bits,
+                bit_value,
+            };
+            let message = bincode::encode_to_vec(&attest_bit, bincode::config::standard()).unwrap();
+            bls::static_sign(&message)
+        });
+
+        Ok(AttestIndexPrice {
+            price,
+            signature: signatures.collect(),
+        })
+    }
+
+    /// Provide a single BLS signature over rounded down price of `symbol` at the minute at
+    /// described at `time` (seconds are ignored).
+    #[activate]
     pub fn attest_to_price_at_minute(
         &self,
         time: OffsetDateTime,
-    ) -> Result<AttestIndexPrice, String> {
-        let price = self.index_price_at_minute(time)?;
+        symbol: String,
+    ) -> Result<AttestIndexPrice<bls::Signature>, String> {
+        let price = self.index_price_at_minute(&symbol, time)?;
         let message = AttestMessage {
             price,
             time,
-            index: self.index,
+            symbol,
         };
 
         let encoded_message =
             bincode::encode_to_vec(&message, bincode::config::standard()).unwrap();
 
-        let signature = global::bls_static_sign(&encoded_message);
+        let signature = bls::static_sign(&encoded_message);
 
         Ok(AttestIndexPrice { price, signature })
     }
 
-    pub fn index_price_at_minute(&self, time: OffsetDateTime) -> Result<u64, String> {
+    pub fn index_price_at_minute(&self, symbol: &str, time: OffsetDateTime) -> Result<u64, String> {
         let time = time.0;
         let mut url =
             url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex").unwrap();
-        let symbol = match self.index {
-            Index::BXBT => ".BXBT",
-        };
+
         #[derive(serde::Serialize)]
         struct Filter<'a> {
             symbol: &'a str,
@@ -80,11 +122,11 @@ impl BitMexAttest {
             timestamp_hour: time.hour(),
             timestamp_min: time.minute(),
             timestamp_second: 0,
-            symbol,
+            symbol: &symbol,
         })
         .expect("serializes correctly");
         url.query_pairs_mut()
-            .append_pair("symbol", symbol) // only interested in index
+            .append_pair("symbol", &symbol) // only interested in index
             .append_pair("filter", &filter)
             .append_pair("columns", "lastPrice,timestamp"); // only necessary fields
 

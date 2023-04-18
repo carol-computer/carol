@@ -1,7 +1,5 @@
 //! Utility module for hex encoding and decoding
-#[cfg(feature = "alloc")]
 use alloc::string::String;
-#[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
 use core::fmt;
@@ -40,7 +38,6 @@ pub fn hex_val(c: u8) -> Result<u8, HexError> {
     }
 }
 
-#[cfg(feature = "alloc")]
 /// Encode some bytes as a hex String.
 pub fn encode(bytes: &[u8]) -> String {
     use core::fmt::Write;
@@ -51,7 +48,6 @@ pub fn encode(bytes: &[u8]) -> String {
     hex
 }
 
-#[cfg(feature = "alloc")]
 /// Decode some hex bytes into a `Vec<u8>`.
 pub fn decode(hex: &str) -> Result<Vec<u8>, HexError> {
     if (hex.len() % 2) != 0 {

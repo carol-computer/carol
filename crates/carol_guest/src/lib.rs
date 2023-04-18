@@ -1,7 +1,13 @@
+#![no_std]
+
+#[allow(unused)]
+#[macro_use]
+extern crate alloc;
+
 pub use bincode;
-use bincode::{de::read::Reader, enc::write::Writer, impl_borrow_decode};
-pub use bls12_381;
-pub use carol_guest_derive::carol;
+pub use carol_guest_derive::{activate, carol};
+pub use serde;
+pub use serde_json;
 
 mod raw {
     wit_bindgen::generate!({
@@ -12,62 +18,44 @@ mod raw {
     });
 }
 
-
-#[derive(Debug, Clone, Copy)]
-pub struct BlsSignature(pub bls12_381::G2Affine);
-
-impl bincode::Encode for BlsSignature {
-    fn encode<E: bincode::enc::Encoder>(
-        &self,
-        encoder: &mut E,
-    ) -> Result<(), bincode::error::EncodeError> {
-        encoder.writer().write(&self.0.to_compressed())?;
-        Ok(())
-    }
-}
-
-impl bincode::Decode for BlsSignature {
-    fn decode<D: bincode::de::Decoder>(
-        decoder: &mut D,
-    ) -> Result<Self, bincode::error::DecodeError> {
-        let mut bytes = [0u8; 96];
-        decoder.reader().read(&mut bytes)?;
-        Ok(BlsSignature(
-            bls12_381::G2Affine::from_compressed(&bytes).unwrap(),
-        ))
-    }
-}
-
-impl_borrow_decode!(BlsSignature);
-
-pub mod global {
+pub mod bls {
     use super::*;
-    pub fn bls_static_pubkey() -> bls12_381::G1Affine {
+    pub use carol_bls::*;
+    pub fn static_pubkey() -> bls12_381::G1Affine {
         let mut bytes = [0u8; 96];
         bytes.copy_from_slice(raw::global::bls_static_pubkey().as_ref());
         bls12_381::G1Affine::from_uncompressed_unchecked(&bytes).unwrap()
     }
 
-    pub fn bls_static_sign(message: &[u8]) -> BlsSignature {
+    pub fn static_sign(message: &[u8]) -> Signature {
         let mut bytes = [0u8; 192];
         let sig = raw::global::bls_static_sign(message);
         bytes.copy_from_slice(&sig);
-        BlsSignature(bls12_381::G2Affine::from_uncompressed_unchecked(&bytes).unwrap())
+        Signature(bls12_381::G2Affine::from_uncompressed_unchecked(&bytes).unwrap())
     }
 }
 
 pub mod http {
-    use super::raw;
-    pub fn http_get(url: &str) -> raw::http::Response {
-        raw::http::execute(raw::http::Request {
+    pub use super::raw::http as wit_http;
+    use http as http_crate;
+
+    pub fn http_get(url: &str) -> wit_http::Response {
+        wit_http::execute(wit_http::RequestParam {
             body: &[],
             headers: &[],
-            method: raw::http::Method::Get,
+            method: wit_http::Method::Get,
             uri: url,
         })
+    }
+
+    impl wit_http::RequestResult {
+        pub fn uri(&self) -> http::Uri {
+            use core::str::FromStr;
+            http_crate::Uri::from_str(&self.uri).unwrap()
+        }
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 pub use raw::__link_section;
-pub use raw::{machine, log};
+pub use raw::{log, machine, machines};

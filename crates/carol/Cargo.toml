@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-hyper = { version = "0.14", features = ["server", "http2", "tcp", "http1"] }
+hyper = { workspace = true, features = ["server", "http2", "tcp", "http1"] }
 tokio = {  version = "1", features = ["full"] }
 serde = { workspace = true }
 serde_yaml = "0.9"
@@ -15,5 +15,8 @@ tracing = { workspace = true }
 clap = {  version = "4", features = ["derive"] }
 tracing-subscriber = "0.3"
 carol_host = { workspace = true }
-carol_core = { workspace = true }
+carol_core = { workspace = true, features = ["std"] }
+carol_bls = { workspace = true }
 bincode = { workspace = true }
+serde_json = { workspace = true }
+rand = { workspace = true }

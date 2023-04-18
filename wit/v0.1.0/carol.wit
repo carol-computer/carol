@@ -3,6 +3,7 @@ interface http {
        get,
        post,
        put,
+       patch,
        delete
     }
     record request {
@@ -27,22 +28,23 @@ interface global {
 
 interface log {
     info: func(message: string)
+    set-panic-message: func(message: string)
+}
+
+interface machines {
+    type machine-id = list<u8>
+    self-activate: func(input: list<u8>) -> result<list<u8>, string>
 }
 
 world machine {
     import http: self.http
     import global: self.global
     import log: self.log
+    import machines: self.machines
 
     export machine: interface {
-        // use self.http.{request as http-request,response as http-response}
+        use self.http.{request as http-request,response as http-response}
         activate: func(machine-params: list<u8>, input: list<u8>) -> list<u8>
+        handle-http: func(request: http-request) -> http-response
     }
 }
-
-
-// world convert {
-//     export convert: interface {
-//         json-to-input: func(json: string) -> option<list<u8>>
-//     }
-// }

@@ -9,3 +9,5 @@ anyhow = { workspace = true }
 bitmex_guest = { path = "../guest" }
 bincode = { workspace = true }
 tokio = { version = "1", features = ["full"] }
+rand = { workspace = true }
+carol_bls = { workspace = true }

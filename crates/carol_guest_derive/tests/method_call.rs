@@ -1,23 +1,31 @@
 use carol_guest::machine::Machine;
-use carol_guest_derive::carol;
+use carol_guest_derive::{activate, carol};
 
 #[derive(bincode::Encode, bincode::Decode)]
 pub struct Foo;
 
 #[carol]
 impl Foo {
+    #[activate]
     pub fn add(&self, lhs: u32, rhs: u32) -> u32 {
         lhs + rhs
     }
 
+    #[activate]
     pub fn checked_sub(&self, lhs: u32, rhs: u32) -> Option<u32> {
         lhs.checked_sub(rhs)
     }
+
+    pub fn non_activate(&self) {
+        unreachable!()
+    }
 }
+
+use carol_activate::{Activate, Add, CheckedSub};
 
 #[test]
 fn call_add() {
-    let method = FooMethods::Add { lhs: 7, rhs: 3 };
+    let method = Activate::Add(Add { lhs: 7, rhs: 3 });
     let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
     let foo = Foo;
     let output = Foo::activate(
@@ -31,7 +39,7 @@ fn call_add() {
 
 #[test]
 fn call_sub() {
-    let method = FooMethods::CheckedSub { lhs: 7, rhs: 3 };
+    let method = Activate::CheckedSub(CheckedSub { lhs: 7, rhs: 3 });
     let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
     let foo = Foo;
     let output = Foo::activate(
@@ -41,4 +49,14 @@ fn call_sub() {
     let (result, _): (Option<u32>, _) =
         bincode::decode_from_slice(&output, bincode::config::standard()).unwrap();
     assert_eq!(result, Some(4));
+}
+
+#[test]
+fn only_activate_attribute_makes_activation_possible() {
+    let method = Activate::Add(Add { lhs: 7, rhs: 3 });
+    // exhaustively match
+    match method {
+        Activate::Add(_) => {}
+        Activate::CheckedSub(_) => {}
+    }
 }

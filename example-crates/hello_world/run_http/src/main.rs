@@ -1,6 +1,6 @@
-use anyhow::Context;
-use carol_core::FullActivation;
+use anyhow::{anyhow, Context};
 use hello_world::HelloWorldMethods;
+use reqwest::header;
 use std::fs::File;
 use std::io::Read;
 
@@ -18,39 +18,26 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let file_name = "target/hello_world.wasm";
     let mut file = File::open(file_name).context(format!("unable to open {}", file_name))?;
-    let mut buf = vec![];
-    file.read_to_end(&mut buf)?;
-
-    let call = bincode::encode_to_vec(
-        &HelloWorldMethods::Say {
-            message: "world!!!".into(),
-        },
-        bincode::config::standard(),
-    )
-    .unwrap();
-
-    let binary = FullActivation {
-        binary: &buf,
-        parameters: &[],
-        activation_input: &call,
-    };
+    let mut binary = vec![];
+    file.read_to_end(&mut binary)?;
 
     let client = reqwest::Client::new();
     let res = client
-        .post(format!("{}/activate", args.carol_url))
-        .body(bincode::encode_to_vec(
-            &binary,
-            bincode::config::standard(),
-        )?)
+        .post(format!("{}/binaries", args.carol_url))
+        .body(binary)
         .send()
         .await?;
 
-    let body_bytes = res.bytes().await?;
+    if !res.status().is_success() {
+        return Err(anyhow!("{}", res.text().await?));
+    }
+    else {
+        let location = res.headers().get(header::LOCATION);
+        println!("posting binary succeeded {:?}", location);
+    }
 
-    let (message, _): (&str, _) =
-        bincode::borrow_decode_from_slice(body_bytes.as_ref(), bincode::config::standard())?;
 
-    println!("got response: {}", message);
+    let res = client.post(format!())
 
     Ok(())
 }
