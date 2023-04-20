@@ -1,4 +1,4 @@
-use carol_guest::*;
+use carol_guest::{activate, bincode, carol, log, serde};
 
 #[derive(bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize)]
 #[serde(crate = "carol_guest::serde")]

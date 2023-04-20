@@ -233,7 +233,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let route = format!("/activate/{}", method.sig.ident.to_string());
 
             let handle_output = match method.sig.output {
-                ReturnType::Default => quote_spanned! { method.sig.span() => wit_http::Response {
+                ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
                     headers: vec![],
                     status: 204,
                     body: vec![]
@@ -252,7 +252,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     quote_spanned! { ty.span() =>  {
                         let (decoded_output, _) : (#ty, _) = bincode::decode_from_slice(&output, bincode::config::standard()).expect(#bincode_decode_output_expect);
                         let json_encoded_output = serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
-                        wit_http::Response {
+                        http::Response {
                             headers: vec![],
                             status: 200,
                             body: json_encoded_output
@@ -281,7 +281,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                                               .expect(#bincode_encode_error);
                         let output = match machines::self_activate(&binary_input) {
                             Ok(output) => output,
-                            Err(e) => return wit_http::Response {
+                            Err(e) => return http::Response {
                                 headers: vec![],
                                 body: format!("HTTP handler failed to self-activate via {}: {}", #route, e).as_bytes().to_vec(),
                                 status: 500,
@@ -307,7 +307,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     });
 
     json_match_arms.push(parse_quote! { _ => {
-        return wit_http::Response {
+        return http::Response {
             headers: vec![],
             body: vec![],
             status: 404
@@ -358,7 +358,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 }));
             }
 
-            use carol_guest::{http::wit_http, bincode};
+            use carol_guest::{http, bincode};
             impl carol_guest::machine::Machine for #self_ty {
                 fn activate(__params: Vec<u8>, __input: Vec<u8>) -> Vec<u8> {
                     use carol_guest::machines;
@@ -369,7 +369,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     #match_stmt
                 }
 
-                fn handle_http(request: wit_http::RequestResult) -> wit_http::Response {
+                fn handle_http(request: http::Request) -> http::Response {
                     #[cfg(target_arch = "wasm32")]
                     set_up_panic_hook();
                     let uri = request.uri();

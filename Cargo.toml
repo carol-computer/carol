@@ -17,7 +17,7 @@ members = [
 edition = "2021"
 
 [workspace.dependencies]
-wit-bindgen = { version = "0.4", features = ['default'] }
+wit-bindgen = { version = "0.5", features = ['default'] }
 wasmtime = { version = "7", features = ["component-model"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive", "alloc"], default-features = false }
