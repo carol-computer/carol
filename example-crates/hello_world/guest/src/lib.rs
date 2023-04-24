@@ -1,4 +1,4 @@
-use carol_guest::{activate, bincode, carol, log, serde};
+use carol_guest::{activate, bincode, cap, carol, serde};
 
 #[derive(bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize)]
 #[serde(crate = "carol_guest::serde")]
@@ -8,9 +8,9 @@ pub struct HelloWorld;
 #[carol]
 impl HelloWorld {
     #[activate]
-    pub fn say(&self, message: String) -> String {
+    pub fn say(&self, cap: &impl cap::Log, message: String) -> String {
         let response = format!("hello {}", message);
-        log::info(&response);
+        cap.log_info(&response);
         response
     }
 }

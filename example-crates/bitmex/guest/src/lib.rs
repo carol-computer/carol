@@ -46,11 +46,12 @@ impl BitMexAttest {
     #[activate]
     pub fn bit_decompose_attest_to_price_at_minute(
         &self,
+        cap: &(impl cap::Bls + cap::Http),
         time: OffsetDateTime,
         symbol: String,
         n_bits: u8,
     ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, String> {
-        let price = self.index_price_at_minute(&symbol, time)?;
+        let price = self.index_price_at_minute(cap, &symbol, time)?;
 
         let capped_price = price.min((1 << n_bits) - 1);
         let signatures = (0..(n_bits as usize)).map(|bit_index| {
@@ -62,7 +63,7 @@ impl BitMexAttest {
                 bit_value,
             };
             let message = bincode::encode_to_vec(&attest_bit, bincode::config::standard()).unwrap();
-            bls::static_sign(&message)
+            cap.bls_static_sign(&message)
         });
 
         Ok(AttestIndexPrice {
@@ -76,10 +77,11 @@ impl BitMexAttest {
     #[activate]
     pub fn attest_to_price_at_minute(
         &self,
+        cap: &(impl cap::Bls + cap::Http),
         time: OffsetDateTime,
         symbol: String,
     ) -> Result<AttestIndexPrice<bls::Signature>, String> {
-        let price = self.index_price_at_minute(&symbol, time)?;
+        let price = self.index_price_at_minute(cap, &symbol, time)?;
         let message = AttestMessage {
             price,
             time,
@@ -89,12 +91,17 @@ impl BitMexAttest {
         let encoded_message =
             bincode::encode_to_vec(&message, bincode::config::standard()).unwrap();
 
-        let signature = bls::static_sign(&encoded_message);
+        let signature = cap.bls_static_sign(&encoded_message);
 
         Ok(AttestIndexPrice { price, signature })
     }
 
-    pub fn index_price_at_minute(&self, symbol: &str, time: OffsetDateTime) -> Result<u64, String> {
+    pub fn index_price_at_minute(
+        &self,
+        cap: &impl cap::Http,
+        symbol: &str,
+        time: OffsetDateTime,
+    ) -> Result<u64, String> {
         let time = time.0;
         let mut url =
             url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex").unwrap();
@@ -130,8 +137,25 @@ impl BitMexAttest {
             .append_pair("filter", &filter)
             .append_pair("columns", "lastPrice,timestamp"); // only necessary fields
 
-        let response = http::http_get(url.as_str());
+        let response = cap.http_get(url.as_str());
         let price_at_time = serde_json::from_slice::<[Price; 1]>(&response.body).unwrap()[0];
         Ok(price_at_time.last_price.floor() as u64)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use carol_guest::TestCap;
+
+    use crate::{BitMexAttest, OffsetDateTime};
+
+    #[test]
+    fn index_price_at_minute() {
+        let time = OffsetDateTime(time::macros::datetime!(2023-04-15 0:00 UTC));
+        let cap = TestCap::default();
+        let index_price = BitMexAttest
+            .attest_to_price_at_minute(&cap, time, ".BXBT".into())
+            .unwrap();
+        assert_eq!(index_price.price, 30492);
     }
 }

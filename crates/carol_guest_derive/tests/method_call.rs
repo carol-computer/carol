@@ -1,5 +1,6 @@
-use carol_guest::machine::Machine;
+use carol_guest::bind::machine::Machine;
 use carol_guest_derive::{activate, carol};
+use core::any::Any;
 
 #[derive(bincode::Encode, bincode::Decode)]
 pub struct Foo;
@@ -7,12 +8,12 @@ pub struct Foo;
 #[carol]
 impl Foo {
     #[activate]
-    pub fn add(&self, lhs: u32, rhs: u32) -> u32 {
+    pub fn add(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
         lhs + rhs
     }
 
     #[activate]
-    pub fn checked_sub(&self, lhs: u32, rhs: u32) -> Option<u32> {
+    pub fn checked_sub(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> Option<u32> {
         lhs.checked_sub(rhs)
     }
 
