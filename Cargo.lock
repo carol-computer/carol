@@ -284,6 +284,7 @@ dependencies = [
  "carol_core",
  "carol_guest_derive",
  "http",
+ "reqwest",
  "serde",
  "serde_json",
  "wit-bindgen",

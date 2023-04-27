@@ -95,10 +95,29 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             };
 
             let mut match_fields = Punctuated::default();
-            for fn_arg in &method.sig.inputs {
+            let mut inputs = method.sig.inputs.iter().peekable();
+            let mut _has_receiver = false; //TODO use this to only pass in receiver if it's there
+            if let Some(syn::FnArg::Receiver(_)) = inputs.peek() {
+                _has_receiver = true;
+                let _ = inputs.next();
+            } else {
+                return quote_spanned!(sig_span => compile_error!("the first argument to an #[activate] method must be &self"));
+            }
+
+            if let Some(syn::FnArg::Typed(pat_type)) = inputs.peek() {
+                if let arg @ syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                    let ident = pat_ident.ident.to_string();
+                    if ident == "cap" || ident == "_cap" {
+                        let _ = inputs.next();
+                    } else {
+                        return quote_spanned!(arg.span() => compile_error!("the second argument after `&self` to an #[activate] method must be `cap`"));
+                    }
+                }
+            }
+
+            for fn_arg in inputs {
                 let span = fn_arg.span();
                 let (field, match_field) = match fn_arg {
-                    syn::FnArg::Receiver(_) => continue,
                     syn::FnArg::Typed(pat_type) => match *pat_type.pat.clone() {
                         syn::Pat::Ident(pat_ident) => (
                             Field {
@@ -117,8 +136,11 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                                 attrs: vec![],
                             },
                         ),
-                        _ => panic!("only take ident fn args"),
+                        arg => {
+                            return quote_spanned!(arg.span() => compile_error!("#[activate] only takes plain fn arguments"))
+                        }
                     },
+                    _ => unreachable!("we dealt with receiver already"),
                 };
 
                 struct_fields.named.push(field);
@@ -167,26 +189,17 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             };
 
             let variant_path: Path = parse_quote!(#carol_mod::#enum_name::#struct_name);
-            // let variant_path: Path = {
-            //     let mut puncuated = Punctuated::new();
-            //     puncuated.push(PathSegment::from(carol_mod.clone()));
-            //     puncuated.push(PathSegment::from(enum_name.clone()));
-            //     puncuated.push(PathSegment::from(variant.ident.clone()));
-            //     Path {
-            //         leading_colon: None,
-            //         segments: puncuated,
-            //     }
-            // }
 
             let activate_call = ExprMethodCall {
                 attrs: vec![],
                 receiver: Box::new(Expr::Verbatim(quote! { machine })),
-                dot_token: Token![.](Span::call_site()),
+                dot_token: Token![.](sig_span),
                 method: method.sig.ident.clone(),
                 turbofish: None,
                 paren_token: token::Paren::default(),
                 args: {
                     let mut punctuated = Punctuated::new();
+                    punctuated.push(parse_quote! { &__ctx });
                     for field in &struct_fields.named {
                         punctuated.push(Expr::Path(ExprPath {
                             attrs: vec![],
@@ -274,12 +287,11 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 pat,
                 fat_arrow_token: Token![=>](sig_span),
                 body: Box::new(Expr::Verbatim(quote_spanned! { sig_span => {
-                        use carol_guest::{bincode, serde_json, machines};
+                        use carol_guest::{bincode, serde_json, cap::Machines};
                         let method_struct = carol_guest::serde_json::from_slice::<#struct_path>(body).expect(#json_decode_error);
                         let method_variant = #variant_path(method_struct);
-                        let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard())
-                                              .expect(#bincode_encode_error);
-                        let output = match machines::self_activate(&binary_input) {
+                        let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
+                        let output = match __ctx.self_activate(&binary_input) {
                             Ok(output) => output,
                             Err(e) => return http::Response {
                                 headers: vec![],
@@ -346,6 +358,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         carol_guest::set_machine!(#self_ty);
 
         #input
+
         mod __machine_impl {
             use super::*;
 
@@ -353,17 +366,17 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             fn set_up_panic_hook() {
                 let original_hook = std::panic::take_hook();
                 std::panic::set_hook(Box::new(move |panic_info| {
-                    carol_guest::log::set_panic_message(&panic_info.to_string());
+                    carol_guest::bind::log::set_panic_message(&panic_info.to_string());
                     (original_hook)(panic_info)
                 }));
             }
 
             use carol_guest::{http, bincode};
-            impl carol_guest::machine::Machine for #self_ty {
+            impl carol_guest::bind::machine::Machine for #self_ty {
                 fn activate(__params: Vec<u8>, __input: Vec<u8>) -> Vec<u8> {
-                    use carol_guest::machines;
                     #[cfg(target_arch = "wasm32")]
                     set_up_panic_hook();
+                    let __ctx = carol_guest::ActivateCap;
                     let (machine, _) = bincode::decode_from_slice::<#self_ty, _>(&__params, bincode::config::standard()).expect(#params_decode_expect);
                     let (method, _) = bincode::decode_from_slice::<#enum_path, _>(&__input, bincode::config::standard()).expect(#input_decode_expect);
                     #match_stmt
@@ -372,6 +385,8 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 fn handle_http(request: http::Request) -> http::Response {
                     #[cfg(target_arch = "wasm32")]
                     set_up_panic_hook();
+                    let __ctx = carol_guest::HttpHandlerCap;
+
                     let uri = request.uri();
                     let mut path = uri.path();
                     let body = &request.body;
