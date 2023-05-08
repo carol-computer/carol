@@ -33,6 +33,7 @@ pub struct AttestBit<'a> {
     pub symbol: &'a str,
     pub time: OffsetDateTime,
     pub n_bits: u8,
+    pub bit_index: u8,
     pub bit_value: bool,
 }
 
@@ -60,6 +61,7 @@ impl BitMexAttest {
                 symbol: &symbol,
                 time,
                 n_bits,
+                bit_index: bit_index as u8,
                 bit_value,
             };
             let message = bincode::encode_to_vec(&attest_bit, bincode::config::standard()).unwrap();
