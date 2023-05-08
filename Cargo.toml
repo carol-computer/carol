@@ -28,7 +28,7 @@ carol_guest_derive = { path = "crates/carol_guest_derive" }
 carol = { path = "crates/carol" }
 carol_core =  { path = "crates/carol_core", default-features = false }
 carol_bls = { path = "crates/carol_bls" }
-reqwest = {  version = "0.11.16", features = ["json"] }
+reqwest = {  version = "0.11.16", features = ["json", "rustls-tls"], default-features = false }
 hyper = { version = "0.14", default-features = false }
 http_crate = { package = "http", version = "0.2" }
 clap = {  version = "4", features = ["derive"] }
