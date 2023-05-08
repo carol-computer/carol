@@ -238,6 +238,9 @@ pub async fn dispatch(
         segments.collect::<Vec<_>>()
     };
     match (req.method(), &segments[..]) {
+        (&Method::GET, [""]) | (&Method::GET, ["index.html"]) => Ok(Response::new(Body::from(
+            b"<html><body><h1> THIS IS A CAROL NODE </h1><p> In the future you will be able to configure this page.</p></body></html>".to_vec(),
+        ))),
         (&Method::POST, ["binaries"]) => {
             let body = slurp_request_body(&mut req).await?;
             let binary_id = BinaryId::new(&body);
