@@ -147,12 +147,11 @@ impl BitMexAttest {
 
 #[cfg(test)]
 mod test {
-    use carol_guest::TestCap;
-
-    use crate::{BitMexAttest, OffsetDateTime};
-
+    #[cfg(feature = "network_tests")]
     #[test]
     fn index_price_at_minute() {
+        use crate::{BitMexAttest, OffsetDateTime};
+        use carol_guest::TestCap;
         let time = OffsetDateTime(time::macros::datetime!(2023-04-15 0:00 UTC));
         let cap = TestCap::default();
         let index_price = BitMexAttest
