@@ -8,7 +8,12 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 cargo_metadata = "0.15.4"
+carol_core = { workspace = true, features = [ "std" ] }
 carol_host.workspace = true
+carol_http.workspace = true
 clap = { workspace = true }
 clap-cargo = { version = "0.10.0", features = [ "cargo_metadata" ] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
 wit-component.workspace = true

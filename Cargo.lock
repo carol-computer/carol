@@ -274,9 +274,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
+ "carol_core",
  "carol_host",
+ "carol_http",
  "clap",
  "clap-cargo",
+ "reqwest",
+ "serde",
+ "serde_json",
  "wit-component 0.9.0",
 ]
 

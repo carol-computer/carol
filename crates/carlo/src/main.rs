@@ -1,10 +1,14 @@
 use anyhow::{anyhow, Context};
+use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::Message;
+use carol_core::BinaryId;
 use carol_host::Executor;
 use clap::{Parser, Subcommand};
 use clap_cargo::Workspace;
 use std::process::{Command, Stdio};
 use wit_component::ComponentEncoder;
+
+mod client;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -19,6 +23,18 @@ enum Commands {
         #[arg(short, long, value_name = "SPEC", group = "build")]
         /// Package to compile to a Carol WASM component (see `cargo help pkgid`)
         package: Option<String>, // real one has Vec<String>
+    },
+    Upload {
+        #[arg(long)]
+        carol_url: String,
+        #[arg(long)]
+        binary: Utf8PathBuf,
+    },
+    Create {
+        #[arg(long)]
+        carol_url: String,
+        #[arg(long)]
+        binary_id: BinaryId,
     },
 }
 
@@ -119,6 +135,32 @@ fn main() -> anyhow::Result<()> {
                 .context("Ensuring WASM component {component_target} is loadable")?;
 
             println!("{component_target}");
+        }
+        Commands::Upload { binary, carol_url } => {
+            let client = client::Client::new(carol_url.clone());
+
+            // Validate and derive BinaryId
+            let binary_id = Executor::new()
+                .load_binary_from_wasm_file(binary)
+                .context("Loading compiled binary")?
+                .binary_id();
+
+            let file = std::fs::File::open(binary)
+                .context(format!("Reading compiled WASM file {}", binary))?;
+
+            let response = client.upload_binary(&binary_id, file)?;
+            let binary_id = response.id;
+            println!("{binary_id}");
+        }
+        Commands::Create {
+            binary_id,
+            carol_url,
+        } => {
+            let client = client::Client::new(carol_url.clone());
+
+            let response = client.create_machine(binary_id)?;
+            let machine_id = response.id;
+            print!("{machine_id}");
         }
     }
 
