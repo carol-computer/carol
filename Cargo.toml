@@ -12,14 +12,16 @@ members = [
     "crates/carol_http",
     "crates/carol_bls",
     "crates/carol",
+    "crates/carlo",
 ]
 
 [workspace.package]
 edition = "2021"
 
 [workspace.dependencies]
-wit-bindgen = { version = "0.5", features = ['default'] }
-wasmtime = { version = "7.0.1", features = ["component-model"] }
+wit-bindgen = { version = "0.6", features = ['default'] }
+wasmtime = { version = "8", features = ["component-model"] }
+wit-component = "0.9.0"
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive", "alloc"], default-features = false }
 bincode = {  version = "2.0.0-rc.3", features = ["serde", "alloc", "derive"], default-features = false }

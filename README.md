@@ -46,14 +46,14 @@ cargo run -p carol -- --cfg carol.yml run &
 First compile it to wasm. Here we just compile one of the examples in `example-crates`.
 
 ``` sh
-./build_example.sh bitmex_guest
+wasm_output=$( cargo run -p carlo -- build -p bitmex_guest )
 ```
 
 Then upload it to carol:
 
 ``` sh
 carol_url=http://localhost:8000
-curl -vv -XPOST --data-binary @./target/bitmex_guest.wasm "${carol_url}/binaries"
+curl -vv -XPOST --data-binary "@${wasm_output}" "${carol_url}/binaries"
 ```
 
 The response will return something like:
@@ -71,7 +71,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-curl -vv -XPOST "${carol_url}/binaries/89ca7c70574592b4476e336b74d39a21fc1d5ab574943189a7ef51c8bc974c94"
+curl -vv -XPOST "${carol_url}/binaries/3ac00e3d0a37e4255bddb4f3389c7acfb51f7dcfa771f70da05b83ea893c7646"
 ```
 
 This will return a response like:

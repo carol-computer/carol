@@ -132,7 +132,7 @@
 
           carolToolchain = pkgs.buildEnv {
             name = "carol-toolchain";
-            paths = with (packagesToAttrs exportedPackages); [ pkgs.rustToolchain carol ];
+            paths = with (packagesToAttrs exportedPackages); [ pkgs.rustToolchain carol carlo ];
           };
           carolCrates = pkgs.buildEnv {
             name = "carol-crates";
