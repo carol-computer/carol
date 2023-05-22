@@ -242,7 +242,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 comma: None,
             });
 
-            let route = format!("/activate/{}", method.sig.ident.to_string());
+            let route = format!("/activate/{}", method.sig.ident);
 
             let handle_output = match method.sig.output {
                 ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
@@ -254,12 +254,12 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     let bincode_decode_output_expect = format!(
                         "#[carol] bincode decoding the output of {} to type {}",
                         method_name,
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     );
                     let json_encode_output_expect = format!(
                         "#[carol]] JSON encoding the output of {} from type {}",
                         method_name,
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     );
                     quote_spanned! { ty.span() =>  {
                         let (decoded_output, _) : (#ty, _) = bincode::decode_from_slice(&output, bincode::config::standard()).expect(#bincode_decode_output_expect);
