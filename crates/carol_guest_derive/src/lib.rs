@@ -397,5 +397,5 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     };
 
-    output.into()
+    output
 }
