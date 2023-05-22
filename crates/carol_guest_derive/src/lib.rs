@@ -70,11 +70,10 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     for item in input.items.clone() {
         if let ImplItem::Method(method) = item {
-            if method
+            if !method
                 .attrs
                 .iter()
-                .find(|attr| attr.path.to_token_stream().to_string() == "activate")
-                .is_none()
+                .any(|attr| attr.path.to_token_stream().to_string() == "activate")
             {
                 continue;
             }
