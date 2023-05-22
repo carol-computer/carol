@@ -232,7 +232,7 @@ pub async fn dispatch(
 ) -> Result<Response<Body>, Problem> {
     let path = req.uri().path();
     let segments = {
-        let mut segments = path.split("/");
+        let mut segments = path.split('/');
         // ignore first `/`
         let _ = segments.next();
         segments.collect::<Vec<_>>()

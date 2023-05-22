@@ -277,7 +277,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
             let json_decode_error = format!(
                 "#[carol] decoding JSON to {}",
-                struct_path.to_token_stream().to_string().replace(" ", "")
+                struct_path.to_token_stream().to_string().replace(' ', "")
             );
             let bincode_encode_error =
                 format!("#[carol] bincode encoding input to {}", method_name);
@@ -336,12 +336,12 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let self_ty = input.self_ty.clone();
     let params_decode_expect = format!(
         "#[carol] bincode decoding parameters as {}",
-        self_ty.to_token_stream().to_string().replace(" ", "")
+        self_ty.to_token_stream().to_string().replace(' ', "")
     );
     let enum_path: Path = parse_quote!(#carol_mod::#enum_name);
     let input_decode_expect = format!(
         "#[carol] bincode decoding input as {}",
-        enum_path.to_token_stream().to_string().replace(" ", "")
+        enum_path.to_token_stream().to_string().replace(' ', "")
     );
 
     let output = quote! {
