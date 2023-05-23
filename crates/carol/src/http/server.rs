@@ -323,7 +323,7 @@ pub async fn dispatch(
                 let compiled_binary = state
                     .get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
-                (binary_id, params.clone(), compiled_binary.clone())
+                (binary_id, params, compiled_binary)
             };
 
             match method {
@@ -376,7 +376,7 @@ pub async fn dispatch(
                 let compiled_binary = state
                     .get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
-                (params.clone(), compiled_binary.clone())
+                (params, compiled_binary)
             };
 
             let transformed_uri = {
