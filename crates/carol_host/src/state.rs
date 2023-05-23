@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use crate::{BinaryId, CompiledBinary, Executor, MachineId};
 use carol_bls as bls;
 use std::collections::HashMap;
