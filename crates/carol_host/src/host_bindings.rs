@@ -31,7 +31,7 @@ pub enum Environment {
 impl Environment {
     pub fn http_client(&self) -> &reqwest::Client {
         match self {
-            Environment::Activation { http_client, .. } => &http_client,
+            Environment::Activation { http_client, .. } => http_client,
             Environment::Http { .. } => {
                 panic!("cannot use http client in http handler environment")
             }
@@ -79,7 +79,7 @@ impl global::Host for Host {
 
     async fn bls_static_sign(&mut self, message: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         Ok(
-            carol_bls::sign(&self.state.bls_keypair(), self.machine_id, &message)
+            carol_bls::sign(self.state.bls_keypair(), self.machine_id, &message)
                 .0
                 .to_uncompressed()
                 .to_vec(),

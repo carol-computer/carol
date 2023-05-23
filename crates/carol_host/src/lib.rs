@@ -143,7 +143,7 @@ impl Executor {
         // // but in the Wasmtime embedding API the first argument is always a `Store`.
         let output = bindings
             .machine()
-            .call_activate(&mut store, &machine_params, &activation_input)
+            .call_activate(&mut store, machine_params, activation_input)
             .instrument(span)
             .await;
 

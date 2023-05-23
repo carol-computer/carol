@@ -64,7 +64,7 @@ impl BitMexAttest {
                 bit_index: bit_index as u8,
                 bit_value,
             };
-            let message = bincode::encode_to_vec(&attest_bit, bincode::config::standard()).unwrap();
+            let message = bincode::encode_to_vec(attest_bit, bincode::config::standard()).unwrap();
             cap.bls_static_sign(&message)
         });
 
@@ -90,8 +90,7 @@ impl BitMexAttest {
             symbol,
         };
 
-        let encoded_message =
-            bincode::encode_to_vec(&message, bincode::config::standard()).unwrap();
+        let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
 
         let signature = cap.bls_static_sign(&encoded_message);
 
@@ -131,11 +130,11 @@ impl BitMexAttest {
             timestamp_hour: time.hour(),
             timestamp_min: time.minute(),
             timestamp_second: 0,
-            symbol: &symbol,
+            symbol,
         })
         .expect("serializes correctly");
         url.query_pairs_mut()
-            .append_pair("symbol", &symbol) // only interested in index
+            .append_pair("symbol", symbol) // only interested in index
             .append_pair("filter", &filter)
             .append_pair("columns", "lastPrice,timestamp"); // only necessary fields
 

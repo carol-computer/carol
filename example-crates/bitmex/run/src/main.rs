@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let call = bincode::encode_to_vec(
-        &carol_activate::Activate::AttestToPriceAtMinute(method),
+        carol_activate::Activate::AttestToPriceAtMinute(method),
         bincode::config::standard(),
     )
     .unwrap();

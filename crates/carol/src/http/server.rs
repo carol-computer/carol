@@ -147,7 +147,7 @@ impl Problem {
     }
 
     pub fn into_bincode_body(self) -> Vec<u8> {
-        bincode::encode_to_vec(&self.client_desc, bincode::config::standard()).unwrap()
+        bincode::encode_to_vec(self.client_desc, bincode::config::standard()).unwrap()
     }
 
     pub fn into_json_body(self) -> Vec<u8> {
