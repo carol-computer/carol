@@ -6,7 +6,7 @@ use hello_world::carol_activate;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let state = State::new(
-        Executor::new(),
+        Executor::default(),
         bls::KeyPair::random(&mut rand::thread_rng()),
     );
     let binary = state
