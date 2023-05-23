@@ -160,7 +160,7 @@ impl<'a> TryFrom<http::RequestParam<'a>> for http_crate::Request<hyper::Body> {
     }
 }
 
-impl<'a> TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
+impl TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
     type Error = anyhow::Error;
 
     fn try_from(guest_request: http::RequestResult) -> Result<Self, Self::Error> {
@@ -185,7 +185,7 @@ impl<'a> TryFrom<http::RequestParam<'a>> for reqwest::Request {
     }
 }
 
-impl<'a> TryFrom<http::RequestResult> for reqwest::Request {
+impl TryFrom<http::RequestResult> for reqwest::Request {
     type Error = anyhow::Error;
 
     fn try_from(value: http::RequestResult) -> Result<Self, Self::Error> {
