@@ -9,9 +9,13 @@
       url = "github:ipetkov/crane";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane, ... }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, crane, advisory-db, ... }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -155,6 +159,53 @@
               wasm-tools
             ];
           };
+
+          checks =
+            let
+              commonArgs = with carolCrateMetadata; {
+                inherit pname version cargoArtifacts;
+                src = ./.; # bypass Crane's source cleaning for checks
+
+                # Nerf some unnecessary stdenv install things to reduce noise,
+                # see https://ryantm.github.io/nixpkgs/stdenv/stdenv/
+                installPhase = "touch $out";
+                dontFixup = true;
+              };
+            in
+            {
+              # Build the crate as part of `nix flake check` for convenience
+              inherit carolToolchain;
+              inherit carolCrates;
+              inherit examples;
+
+              nextest = craneLib.cargoNextest (commonArgs // {
+                partitions = 1;
+                partitionType = "count";
+                installPhase = "cp -r target/nextest $out";
+              });
+
+              clippy = craneLib.cargoClippy (commonArgs // {
+                cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+              });
+
+              doc = craneLib.cargoDoc (commonArgs // {
+                installPhase = "cp -r target/doc $out";
+              });
+
+              fmt = craneLib.cargoFmt commonArgs;
+
+              audit = craneLib.cargoAudit (commonArgs // {
+                inherit advisory-db;
+              });
+
+              machete = craneLib.mkCargoDerivation (commonArgs // {
+                pname = "carol-machete";
+                nativeBuildInputs = [ cargo-machete ];
+                buildPhaseCargoCommand = "";
+                checkPhaseCargoCommand = "cargo machete";
+                doCheck = true;
+              });
+            };
         }
       );
 }
