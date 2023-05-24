@@ -178,6 +178,30 @@
               inherit carolCrates;
               inherit examples;
 
+              readmeShellcheck = stdenv.mkDerivation (with commonArgs; {
+                inherit src installPhase;
+                pname = "readme-codeblocks";
+                version = carolCrateMetadata.version;
+                buildInputs = [
+                  # extract sh code blocks from markdown using a pandoc filter
+                  (writeScriptBin "extract-codeblocks" ''
+                    ${pkgs.pandoc}/bin/pandoc \
+                      -f gfm -t native -o /dev/null \
+                      --lua-filter /dev/stdin \
+                      $* <<PANDOC_FILTER
+                    function CodeBlock(x)
+                        if x.attr.classes[1] == "sh" then
+                            print(x.text)
+                        end
+                    end
+                    PANDOC_FILTER
+                  '')
+                ];
+                buildPhase = "extract-codeblocks README.md > README-codeblocks.sh";
+                checkPhase = "${pkgs.shellcheck}/bin/shellcheck -s sh -o all README-codeblocks.sh";
+                doCheck = true;
+              });
+
               nextest = craneLib.cargoNextest (commonArgs // {
                 partitions = 1;
                 partitionType = "count";
