@@ -310,15 +310,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode 2.0.0-rc.3",
  "carol_bls",
  "carol_core",
  "http",
  "hyper",
  "rand",
  "reqwest",
- "sha2 0.9.9",
- "time",
  "tracing",
  "wasmtime",
 ]
@@ -862,7 +859,6 @@ dependencies = [
  "hello_world",
  "rand",
  "tokio",
- "wasmtime",
 ]
 
 [[package]]
