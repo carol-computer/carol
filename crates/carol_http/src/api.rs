@@ -1,4 +1,4 @@
-use carol_core::{BinaryId, MachineId};
+use carol_core::{serde, BinaryId, MachineId};
 use hyper::{header, http::HeaderValue, HeaderMap, StatusCode};
 
 #[derive(serde::Serialize, serde::Deserialize)]
