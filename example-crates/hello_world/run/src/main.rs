@@ -6,7 +6,7 @@ use hello_world::carol_activate;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let state = State::new(
-        Executor::new(),
+        Executor::default(),
         bls::KeyPair::random(&mut rand::thread_rng()),
     );
     let binary = state
@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
         .context("target/hello_world.wasm not found. Make sure to build it first!")?;
 
     let call = bincode::encode_to_vec(
-        &carol_activate::Activate::Say(carol_activate::Say {
+        carol_activate::Activate::Say(carol_activate::Say {
             message: "world!!!".into(),
         }),
         bincode::config::standard(),

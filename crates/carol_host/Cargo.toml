@@ -8,14 +8,11 @@ edition = "2021"
 [dependencies]
 wasmtime = { workspace = true }
 carol_bls = { workspace = true }
-sha2 = { workspace = true }
 reqwest = {  version = "0.11.16", features = ["rustls-tls"], default-features = false }
 http_crate = { workspace = true }
 anyhow = { workspace = true }
-time = { version = "0.3", features = ["std", "serde-human-readable"] }
 async-trait = "0.1"
 rand = "0.8"
 tracing = { workspace = true }
 carol_core = { workspace = true }
 hyper = { workspace = true }
-bincode = { workspace = true }

@@ -1,3 +1,4 @@
+#![allow(renamed_and_removed_lints, unknown_lints, disallowed_names)]
 use carol_guest::bind::machine::Machine;
 use carol_guest_derive::{activate, carol};
 use core::any::Any;
