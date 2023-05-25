@@ -14,28 +14,13 @@ use std::str::FromStr;
 use tracing::{event, span, Instrument, Level};
 
 async fn handle(req: Request<Body>, state: State) -> Result<Response<Body>, Infallible> {
-    let content_type = req
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .map(|accepts| accepts.to_str().unwrap_or(""))
-        .unwrap_or("");
-    let accepts = req
-        .headers()
-        .get(header::ACCEPT)
-        .map(|accepts| accepts.to_str().unwrap_or(""))
-        .unwrap_or("");
-    let request_encoding = Encoding::from_content_type(content_type);
-    let response_encoding = Encoding::from_accepts_header(accepts);
     let span = span!(
         Level::INFO,
         "HTTP",
         method = req.method().as_str(),
         uri = req.uri().to_string()
     );
-    match dispatch(req, state, request_encoding, response_encoding)
-        .instrument(span.clone())
-        .await
-    {
+    match dispatch(req, state).instrument(span.clone()).await {
         Ok(res) => Ok(res),
         Err(problem) => {
             let _enter = span.enter();
@@ -45,10 +30,7 @@ async fn handle(req: Request<Body>, state: State) -> Result<Response<Body>, Infa
                 "HTTP response failed"
             );
             let status = problem.status;
-            let body = match response_encoding {
-                Encoding::Json => problem.into_json_body(),
-                Encoding::Bincode => problem.into_bincode_body(),
-            };
+            let body = problem.into_json_body();
             let mut response = Response::new(Body::from(body));
             *response.status_mut() = status;
             Ok(response)
@@ -146,10 +128,6 @@ impl Problem {
         )
     }
 
-    pub fn into_bincode_body(self) -> Vec<u8> {
-        bincode::encode_to_vec(&self.client_desc, bincode::config::standard()).unwrap()
-    }
-
     pub fn into_json_body(self) -> Vec<u8> {
         #[derive(serde::Serialize)]
         struct ProblemBody {
@@ -165,71 +143,20 @@ impl Problem {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Encoding {
-    Json,
-    Bincode,
+fn build_response<B: api::Response>(app_response: &B) -> Response<Body> {
+    let body = serde_json::to_vec_pretty(app_response).unwrap();
+    let mut response = Response::new(Body::from(body));
+    let headers = response.headers_mut();
+    app_response.set_headers(headers);
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_str("application/json").unwrap(),
+    );
+    *response.status_mut() = app_response.status();
+    response
 }
 
-impl Encoding {
-    pub fn build_response<B: api::Response>(self, app_response: &B) -> Response<Body> {
-        let (body, mime_type) = match self {
-            Self::Bincode => (
-                bincode::encode_to_vec(app_response, bincode::config::standard()).unwrap(),
-                "application/bincode",
-            ),
-            Self::Json => (
-                serde_json::to_vec_pretty(app_response).unwrap(),
-                "application/json",
-            ),
-        };
-
-        let mut response = Response::new(Body::from(body));
-        let headers = response.headers_mut();
-        app_response.set_headers(headers);
-        headers.insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_str(mime_type).unwrap(),
-        );
-        *response.status_mut() = app_response.status();
-        response
-    }
-
-    pub fn decode_request<'a, B>(&self, request_body: &'a [u8]) -> anyhow::Result<B>
-    where
-        B: serde::Deserialize<'a> + bincode::BorrowDecode<'a>,
-    {
-        match self {
-            Encoding::Json => Ok(serde_json::from_slice(request_body)?),
-            Encoding::Bincode => {
-                Ok(bincode::borrow_decode_from_slice(request_body, bincode::config::standard())?.0)
-            }
-        }
-    }
-
-    pub fn from_accepts_header(val: &str) -> Self {
-        if val.contains("application/bincode") {
-            Encoding::Bincode
-        } else {
-            Encoding::Json
-        }
-    }
-
-    pub fn from_content_type(val: &str) -> Self {
-        if val.starts_with("application/bincode") {
-            Encoding::Bincode
-        } else {
-            Encoding::Json
-        }
-    }
-}
-
-pub async fn dispatch(
-    mut req: Request<Body>,
-    state: State,
-    _request_encoding: Encoding,
-    response_encoding: Encoding,
-) -> Result<Response<Body>, Problem> {
+pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<Body>, Problem> {
     let path = req.uri().path();
     let segments = {
         let mut segments = path.split("/");
@@ -254,8 +181,7 @@ pub async fn dispatch(
 
             if already_exists {
                 event!(Level::DEBUG, "already existing binary ignored");
-                let mut response =
-                    response_encoding.build_response(&BinaryCreated { id: binary_id });
+                let mut response = build_response(&BinaryCreated { id: binary_id });
                 *response.status_mut() = StatusCode::OK;
                 Ok(response)
             } else {
@@ -273,7 +199,7 @@ pub async fn dispatch(
                 debug_assert_eq!(compiled_binary.binary_id(), binary_id);
                 state.insert_binary(compiled_binary);
                 event!(Level::INFO, "new binary uploaded");
-                Ok(response_encoding.build_response(&BinaryCreated { id: binary_id }))
+                Ok(build_response(&BinaryCreated { id: binary_id }))
             }
         }
         (method, ["binaries", binary_id]) => {
@@ -292,8 +218,7 @@ pub async fn dispatch(
                 &Method::POST => {
                     let params = slurp_request_body(&mut req).await?;
                     let (already_exists, machine_id) = state.insert_machine(binary_id, params);
-                    let mut response =
-                        response_encoding.build_response(&MachineCreated { id: machine_id });
+                    let mut response = build_response(&MachineCreated { id: machine_id });
 
                     if already_exists {
                         *response.status_mut() = StatusCode::OK;
@@ -327,7 +252,7 @@ pub async fn dispatch(
             };
 
             match method {
-                &Method::GET => Ok(response_encoding.build_response(&GetMachine {
+                &Method::GET => Ok(build_response(&GetMachine {
                     binary_id,
                     params: params.as_ref(),
                 })),

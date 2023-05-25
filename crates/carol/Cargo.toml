@@ -17,6 +17,5 @@ tracing-subscriber = "0.3"
 carol_host = { workspace = true }
 carol_core = { workspace = true, features = ["std"] }
 carol_bls = { workspace = true }
-bincode = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }
