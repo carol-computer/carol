@@ -37,7 +37,6 @@
             src = craneLib.path ./.;
             filter = path: type:
               (pkgs.lib.hasSuffix "\.wit" path) ||
-              (pkgs.lib.hasSuffix "\.md" path) ||
               (craneLib.filterCargoSources path type);
           };
 
@@ -178,27 +177,42 @@
               inherit carolCrates;
               inherit examples;
 
-              readmeShellcheck = stdenv.mkDerivation (with commonArgs; {
-                inherit src installPhase;
+              # Check that shellcheck approves of the README shell blocks and
+              # that they execute to the best of our ability in the nix sandbox.
+              # This requires mkCargoDerivation for cargo metadata, used by
+              # carlo build, to work in the sandbox.
+              readme = craneLib.mkCargoDerivation (commonArgs // {
                 pname = "readme-codeblocks";
                 version = carolCrateMetadata.version;
                 buildInputs = [
+                  carolToolchain
+                  pkgs.curl
+                  pkgs.wasm-tools
                   # extract sh code blocks from markdown using a pandoc filter
                   (writeScriptBin "extract-codeblocks" ''
                     ${pkgs.pandoc}/bin/pandoc \
                       -f gfm -t native -o /dev/null \
                       --lua-filter /dev/stdin \
-                      $* <<PANDOC_FILTER
-                    function CodeBlock(x)
-                        if x.attr.classes[1] == "sh" then
-                            print(x.text)
-                        end
+                      $* <<PANDOC_FILTER | ${pkgs.perl}/bin/perl -pe 's/cargo run -p (carlo|carol) --/$1/; s/curl/curl --fail-with-body/'
+                    function CodeBlock (x)
+                      if x.attr.classes[ 1 ] == "sh" then
+                        print (x.text)
+                      end
                     end
                     PANDOC_FILTER
                   '')
                 ];
-                buildPhase = "extract-codeblocks README.md > README-codeblocks.sh";
-                checkPhase = "${pkgs.shellcheck}/bin/shellcheck -s sh -o all README-codeblocks.sh";
+                buildPhaseCargoCommand = "extract-codeblocks README.md > README-codeblocks.sh";
+                checkPhaseCargoCommand = ''
+                  ${pkgs.shellcheck}/bin/shellcheck -s sh -o all README-codeblocks.sh
+
+                  # likewise, the nix sandbox won't let us actually talk to
+                  # bitmex, so we can't execute the activation
+                  (
+                    grep -v 'curl.*activate' README-codeblocks.sh
+                    echo 'set +e; kill $( jobs -p )'
+                  ) | ${pkgs.bash}/bin/sh -x -e
+                '';
                 doCheck = true;
               });
 

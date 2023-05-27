@@ -37,7 +37,7 @@ cargo run -p carol -- --cfg carol.yml config-gen
 This will generate a default configuration (along with some secret keys!) and put them in `carol.yml`.
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml run
+cargo run -p carol -- --cfg carol.yml run &
 ```
 
 
@@ -71,7 +71,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-curl -vv -XPOST "${carol_url}/binaries/ddd205ed60d8b094f0c7b5b46c4d9d9a0fe36f14fd306572a5c6191c1fd0a46b"
+curl -vv -XPOST "${carol_url}/binaries/89ca7c70574592b4476e336b74d39a21fc1d5ab574943189a7ef51c8bc974c94"
 ```
 
 This will return a response like:
