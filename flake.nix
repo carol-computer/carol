@@ -142,6 +142,28 @@
             name = "carol-examples";
             paths = examplePackages;
           };
+
+          clippy-sarif = pkgs.rustPlatform.buildRustPackage rec {
+            pname = "clippy-sarif";
+            version = "0.3.7";
+            cargoHash = "sha256-6lfpLyUGJ4J6WPjD1QR1UczEy0qTDecqblN6HVdDaJo=";
+            src = pkgs.fetchCrate {
+              inherit pname version;
+              hash = "sha256-6QAaHs1D3xnVEQI3+U/a9zmjYUMzGgElGI93GD5Edtk=";
+            };
+          };
+
+          sarif-fmt = pkgs.rustPlatform.buildRustPackage rec {
+            pname = "sarif-fmt";
+            version = "0.3.7";
+            cargoHash = "sha256-ToLWGMt9II6C+O7VbJZ7wC01C/0yAg4aAFM/V7piHWo=";
+            doCheck = false; # buildInputs = [ clang-tools ]; # needs clang-tidy in test
+            src = pkgs.fetchCrate {
+              inherit pname version;
+              hash = "sha256-On9qis+I+p2wZCoxX4S2uu9DXdh+zCgyIYctT6DedfI=";
+            };
+          };
+
         in
         with pkgs;
         {
@@ -156,6 +178,8 @@
               lldb
               cargo-nextest
               wasm-tools
+              nix-output-monitor
+              cachix
             ];
           };
 
@@ -223,7 +247,14 @@
               });
 
               clippy = craneLib.cargoClippy (commonArgs // {
-                cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+                # FIXME this abuses crane implementation detail to pipe things throgh clippy-sarif & sarif-fmt
+                cargoClippyExtraArgs = "--all-features --all-targets --message-format=json -- --deny warnings | clippy-sarif | tee clippy.sarif | sarif-fmt";
+
+                nativeBuildInputs = [
+                  clippy-sarif
+                  sarif-fmt
+                ];
+                installPhase = "cp -r clippy.sarif $out";
               });
 
               doc = craneLib.cargoDoc (commonArgs // {

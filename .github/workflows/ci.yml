@@ -1,0 +1,82 @@
+name: CI checks
+
+env:
+  CARGO_TERM_COLOR: always
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  flake:
+    name: Run flake checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - run: |
+          sudo mkdir -p /nix/var
+          sudo chown -R "${USER}:" /nix/
+      - name: Restore Nix Store From Github Cache
+        id: cache-nix
+        uses: actions/cache/restore@v3
+        with:
+          key: cache-nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('Cargo.lock') }}
+          path: |
+            /nix/store/
+            /nix/var/nix/db/db.sqlite
+          restore-keys: |
+            cache-nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+            cache-nix-${{ runner.os }}
+      - run: |
+          sudo chown root:root /nix/
+          sudo chown -R root:root /nix/var
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v1
+      - uses: cachix/cachix-action@v12
+        with:
+          name: carol
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - name: Test
+        run: |
+          system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+          if result="$( nix build ".#checks.${system}.nextest" -L --keep-failed --keep-outputs --print-out-paths )"; then
+            ln -s "${result}" test_result
+          else
+            # if the tests fail, pull the junit.xml out of the tmp directory
+            ln -s "$( ls -trd /tmp/nix-build-carol-nextest-*.drv-* | tail -1 )"/*-source/target test_result
+          fi
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v3
+        if: success() || failure()
+        with:
+          report_paths: 'test_result/nextest/default/junit.xml' # as per .config/nextest.toml
+      - name: Clippy
+        run: |
+          system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+          if result="$( nix build ".#checks.${system}.clippy" -L --keep-failed --keep-outputs --print-out-paths )"; then
+            ln -s "${result}" clippy.sarif
+          else
+            # if clippy failed, try to pull the sarif report out of the tmp directory
+            ln -s "$( ls -trd /tmp/nix-build-carol-clippy-*.drv-* | tail -1 )"/*-source/clippy.sarif
+          fi
+      # FIXME posting annotations with this or just auguwu/clippy-action doesn't
+      # seem to create annotations. For now the flake check output will have to do.
+      # name: Publish Clippy Report
+      #   uses: github/codeql-action/upload-sarif@v2
+      #   with:
+      #     sarif_file: clippy.sarif
+      #     wait-for-processing: true
+      # - run: cat clippy.sarif
+      - name: Run All Flake Checks
+        run: nix flake check -L
+      - name: Save Nix Store Cache
+        if: steps.cache-nix.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          key: ${{ steps.cache-nix.outputs.cache-primary-key }}
+          path: |
+            /nix/store/
+            /nix/var/nix/db/db.sqlite
