@@ -70,11 +70,10 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     for item in input.items.clone() {
         if let ImplItem::Method(method) = item {
-            if method
+            if !method
                 .attrs
                 .iter()
-                .find(|attr| attr.path.to_token_stream().to_string() == "activate")
-                .is_none()
+                .any(|attr| attr.path.to_token_stream().to_string() == "activate")
             {
                 continue;
             }
@@ -243,7 +242,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 comma: None,
             });
 
-            let route = format!("/activate/{}", method.sig.ident.to_string());
+            let route = format!("/activate/{}", method.sig.ident);
 
             let handle_output = match method.sig.output {
                 ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
@@ -255,12 +254,12 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     let bincode_decode_output_expect = format!(
                         "#[carol] bincode decoding the output of {} to type {}",
                         method_name,
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     );
                     let json_encode_output_expect = format!(
                         "#[carol]] JSON encoding the output of {} from type {}",
                         method_name,
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     );
                     quote_spanned! { ty.span() =>  {
                         let (decoded_output, _) : (#ty, _) = bincode::decode_from_slice(&output, bincode::config::standard()).expect(#bincode_decode_output_expect);
@@ -278,7 +277,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
             let json_decode_error = format!(
                 "#[carol] decoding JSON to {}",
-                struct_path.to_token_stream().to_string().replace(" ", "")
+                struct_path.to_token_stream().to_string().replace(' ', "")
             );
             let bincode_encode_error =
                 format!("#[carol] bincode encoding input to {}", method_name);
@@ -337,12 +336,12 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let self_ty = input.self_ty.clone();
     let params_decode_expect = format!(
         "#[carol] bincode decoding parameters as {}",
-        self_ty.to_token_stream().to_string().replace(" ", "")
+        self_ty.to_token_stream().to_string().replace(' ', "")
     );
     let enum_path: Path = parse_quote!(#carol_mod::#enum_name);
     let input_decode_expect = format!(
         "#[carol] bincode decoding input as {}",
-        enum_path.to_token_stream().to_string().replace(" ", "")
+        enum_path.to_token_stream().to_string().replace(' ', "")
     );
 
     let output = quote! {
@@ -398,5 +397,5 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     };
 
-    output.into()
+    output
 }

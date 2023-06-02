@@ -54,7 +54,7 @@ pub async fn main() -> anyhow::Result<()> {
             tracing::subscriber::set_global_default(subscriber)?;
             event!(Level::INFO, "starting carol");
 
-            let state = State::new(Executor::new(), config.bls_secret_key);
+            let state = State::new(Executor::default(), config.bls_secret_key);
 
             carol::http::server::start(config.http_server, state).await?;
         }

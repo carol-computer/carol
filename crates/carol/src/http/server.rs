@@ -159,7 +159,7 @@ fn build_response<B: api::Response>(app_response: &B) -> Response<Body> {
 pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<Body>, Problem> {
     let path = req.uri().path();
     let segments = {
-        let mut segments = path.split("/");
+        let mut segments = path.split('/');
         // ignore first `/`
         let _ = segments.next();
         segments.collect::<Vec<_>>()
@@ -248,7 +248,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 let compiled_binary = state
                     .get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
-                (binary_id, params.clone(), compiled_binary.clone())
+                (binary_id, params, compiled_binary)
             };
 
             match method {
@@ -301,7 +301,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 let compiled_binary = state
                     .get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
-                (params.clone(), compiled_binary.clone())
+                (params, compiled_binary)
             };
 
             let transformed_uri = {
