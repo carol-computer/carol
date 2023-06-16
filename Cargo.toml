@@ -9,16 +9,19 @@ members = [
     "crates/carol_host",
     "crates/carol_guest_derive",
     "crates/carol_core",
+    "crates/carol_http",
     "crates/carol_bls",
     "crates/carol",
+    "crates/carlo",
 ]
 
 [workspace.package]
 edition = "2021"
 
 [workspace.dependencies]
-wit-bindgen = { version = "0.5", features = ['default'] }
-wasmtime = { version = "7.0.1", features = ["component-model"] }
+wit-bindgen = { version = "0.6", features = ['default'] }
+wasmtime = { version = "8", features = ["component-model"] }
+wit-component = "0.9.0"
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive", "alloc"], default-features = false }
 bincode = {  version = "2.0.0-rc.3", features = ["serde", "alloc", "derive"], default-features = false }
@@ -27,8 +30,9 @@ carol_host = { path = "crates/carol_host" }
 carol_guest_derive = { path = "crates/carol_guest_derive" }
 carol = { path = "crates/carol" }
 carol_core =  { path = "crates/carol_core", default-features = false }
+carol_http = { path = "crates/carol_http" }
 carol_bls = { path = "crates/carol_bls" }
-reqwest = {  version = "0.11.16", features = ["json", "rustls-tls"], default-features = false }
+reqwest = {  version = "0.11.16", features = ["json", "rustls-tls", "blocking"], default-features = false }
 hyper = { version = "0.14", default-features = false }
 http_crate = { package = "http", version = "0.2" }
 clap = {  version = "4", features = ["derive"] }

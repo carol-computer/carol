@@ -1,12 +1,12 @@
-use carol_core::{BinaryId, MachineId};
+use carol_core::{serde, BinaryId, MachineId};
 use hyper::{header, http::HeaderValue, HeaderMap, StatusCode};
 
-#[derive(serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BinaryCreated {
     pub id: BinaryId,
 }
 
-pub trait Response: serde::Serialize + bincode::Encode {
+pub trait Response: serde::Serialize {
     fn status(&self) -> StatusCode {
         StatusCode::OK
     }
@@ -26,7 +26,7 @@ impl Response for BinaryCreated {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct MachineCreated {
     pub id: MachineId,
 }
@@ -44,7 +44,7 @@ impl Response for MachineCreated {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, bincode::Encode, bincode::BorrowDecode)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GetMachine<'a> {
     pub binary_id: BinaryId,
     pub params: &'a [u8],

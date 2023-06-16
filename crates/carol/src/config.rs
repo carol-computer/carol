@@ -30,10 +30,11 @@ impl Default for HttpServerConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
 pub enum Level {
     Error,
     Warn,
+    #[default]
     Info,
     Debug,
     Trace,
@@ -54,12 +55,6 @@ impl From<Level> for tracing::Level {
 impl From<Level> for tracing::level_filters::LevelFilter {
     fn from(value: Level) -> Self {
         tracing::Level::from(value).into()
-    }
-}
-
-impl Default for Level {
-    fn default() -> Self {
-        Level::Info
     }
 }
 

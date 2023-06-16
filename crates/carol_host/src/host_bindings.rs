@@ -31,7 +31,7 @@ pub enum Environment {
 impl Environment {
     pub fn http_client(&self) -> &reqwest::Client {
         match self {
-            Environment::Activation { http_client, .. } => &http_client,
+            Environment::Activation { http_client, .. } => http_client,
             Environment::Http { .. } => {
                 panic!("cannot use http client in http handler environment")
             }
@@ -79,7 +79,7 @@ impl global::Host for Host {
 
     async fn bls_static_sign(&mut self, message: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         Ok(
-            carol_bls::sign(&self.state.bls_keypair(), self.machine_id, &message)
+            carol_bls::sign(self.state.bls_keypair(), self.machine_id, &message)
                 .0
                 .to_uncompressed()
                 .to_vec(),
@@ -160,7 +160,7 @@ impl<'a> TryFrom<http::RequestParam<'a>> for http_crate::Request<hyper::Body> {
     }
 }
 
-impl<'a> TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
+impl TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
     type Error = anyhow::Error;
 
     fn try_from(guest_request: http::RequestResult) -> Result<Self, Self::Error> {
@@ -185,7 +185,7 @@ impl<'a> TryFrom<http::RequestParam<'a>> for reqwest::Request {
     }
 }
 
-impl<'a> TryFrom<http::RequestResult> for reqwest::Request {
+impl TryFrom<http::RequestResult> for reqwest::Request {
     type Error = anyhow::Error;
 
     fn try_from(value: http::RequestResult) -> Result<Self, Self::Error> {

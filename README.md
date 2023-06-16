@@ -37,7 +37,7 @@ cargo run -p carol -- --cfg carol.yml config-gen
 This will generate a default configuration (along with some secret keys!) and put them in `carol.yml`.
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml run
+cargo run -p carol -- --cfg carol.yml run &
 ```
 
 
@@ -46,20 +46,14 @@ cargo run -p carol -- --cfg carol.yml run
 First compile it to wasm. Here we just compile one of the examples in `example-crates`.
 
 ``` sh
-./build_example.sh bitmex_guest
+wasm_output=$( cargo run -p carlo -- build -p bitmex_guest )
 ```
 
 Then upload it to carol:
 
 ``` sh
 carol_url=http://localhost:8000
-curl -vv -XPOST --data-binary @./target/bitmex_guest.wasm $carol_url/binaries
-```
-
-The response will return something like:
-
-```json
-{"id":"d1e3e462c1e61dd99c7c05c3c818134721a0fb5c33280085e6c4acab96835d5c"}
+binary_id=$( cargo run -p carlo -- upload --carol-url "${carol_url}" --binary "${wasm_output}" )
 ```
 
 Note this `id` is just a hash of the binary. In general it's intended for client software to
@@ -71,13 +65,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-curl -vv -XPOST "$carol_url/binaries/ddd205ed60d8b094f0c7b5b46c4d9d9a0fe36f14fd306572a5c6191c1fd0a46b"
-```
-
-This will return a response like:
-
-``` json
-{"id":"7f5389c82658b4792e8b32b91817300b5169458fb82fd1eab63f33f36e1decaf"}
+machine_id=$( cargo run -p carlo -- create --carol-url "${carol_url}" --binary-id "${binary_id}" )
 ```
 
 Note this `id` is a hash of the binary and the (empty) parameterization vector. In general it's
@@ -96,7 +84,7 @@ Let's send a HTTP request to the machine which will activate the `attest_to_pric
 
 
 ```sh
-curl -v  -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' $carol_url/machines/7f5389c82658b4792e8b32b91817300b5169458fb82fd1eab63f33f36e1decaf/activate/attest_to_price_at_minute
+curl -v -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' "${carol_url}/machines/${machine_id}/activate/attest_to_price_at_minute"
 ```
 
 which at the time of writing returns:

@@ -13,7 +13,7 @@ pub struct KeyPair {
 
 impl KeyPair {
     pub fn new(sk: bls12_381::Scalar) -> Self {
-        let pk = bls12_381::G1Affine::generator() * &sk;
+        let pk = bls12_381::G1Affine::generator() * sk;
         Self { pk: pk.into(), sk }
     }
 
