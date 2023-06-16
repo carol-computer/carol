@@ -19,11 +19,15 @@
     flake-utils.lib.eachDefaultSystem
       (system:
         let
+          rustupToolchainToml = (readTomlFile ./rust-toolchain.toml).toolchain;
+
           overlays = [
             # use rust overlay to provide a rust toolchain same as rustup would
             (import rust-overlay)
             (self: super: {
-              rustToolchain = super.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+              rustToolchain = (super.rust-bin.fromRustupToolchain ({
+                channel = "stable";
+              } // rustupToolchainToml));
             })
           ];
 
@@ -132,7 +136,7 @@
 
           carolToolchain = pkgs.buildEnv {
             name = "carol-toolchain";
-            paths = with (packagesToAttrs exportedPackages); [ pkgs.rustToolchain carol carlo ];
+            paths = with (packagesToAttrs exportedPackages); [ carol carlo ];
           };
           carolCrates = pkgs.buildEnv {
             name = "carol-crates";
@@ -164,6 +168,16 @@
             };
           };
 
+          # additional nixpkgs supplied tools for devshells
+          devShellPackages = with pkgs; [
+              lldb
+              cargo-nextest
+              wasm-tools
+              nix-output-monitor
+              cachix
+          ];
+
+          devShellToolchainExtensions = [ "rust-src" "rust-analyzer" ];
         in
         with pkgs;
         {
@@ -172,15 +186,14 @@
             examples = examples // (packagesToAttrs examplePackages);
           };
 
-          devShells.default = mkShell {
-            buildInputs = [
-              rustToolchain
-              lldb
-              cargo-nextest
-              wasm-tools
-              nix-output-monitor
-              cachix
-            ];
+          devShells = rec {
+            default = stable;
+
+            stable = mkShell {
+              buildInputs = [
+                (rustToolchain.override {extensions = devShellToolchainExtensions;})
+              ] ++ devShellPackages;
+            };
           };
 
           checks =
@@ -210,6 +223,7 @@
                 version = carolCrateMetadata.version;
                 buildInputs = [
                   carolToolchain
+                  pkgs.rustToolchain # the wasm toolchain for carlo
                   pkgs.curl
                   pkgs.wasm-tools
                   # extract sh code blocks from markdown using a pandoc filter
