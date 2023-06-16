@@ -1,4 +1,2 @@
 [toolchain]
-channel = "stable"
 targets = [ "wasm32-unknown-unknown" ]
-components = [ "rust-src", "rust-analyzer" ]
