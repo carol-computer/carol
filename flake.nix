@@ -28,6 +28,14 @@
               rustToolchain = (super.rust-bin.fromRustupToolchain ({
                 channel = "stable";
               } // rustupToolchainToml));
+
+              rustToolchain-beta = (super.rust-bin.fromRustupToolchain ({
+                channel = "beta";
+              } // rustupToolchainToml));
+
+              rustToolchain-nightly = (super.rust-bin.fromRustupToolchain ({
+                channel = "nightly";
+              } // rustupToolchainToml));
             })
           ];
 
@@ -189,9 +197,25 @@
           devShells = rec {
             default = stable;
 
+            rustup = mkShell {
+              buildInputs = [ pkgs.rustup ] ++ devShellPackages;
+            };
+
             stable = mkShell {
               buildInputs = [
                 (rustToolchain.override {extensions = devShellToolchainExtensions;})
+              ] ++ devShellPackages;
+            };
+
+            beta = mkShell {
+              buildInputs = [
+                (rustToolchain-beta.override {extensions = devShellToolchainExtensions;})
+              ] ++ devShellPackages;
+            };
+
+            nightly = mkShell {
+              buildInputs = [
+                (rustToolchain-nightly.override {extensions = devShellToolchainExtensions;})
               ] ++ devShellPackages;
             };
           };
