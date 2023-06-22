@@ -286,7 +286,7 @@
 
               clippy = craneLib.cargoClippy (commonArgs // {
                 # FIXME this abuses crane implementation detail to pipe things throgh clippy-sarif & sarif-fmt
-                cargoClippyExtraArgs = "--all-features --all-targets --message-format=json -- --deny warnings | clippy-sarif | tee clippy.sarif | sarif-fmt";
+                cargoClippyExtraArgs = "--no-deps --all-features --all-targets --message-format=json -- --deny warnings | clippy-sarif | tee clippy.sarif | sarif-fmt";
 
                 nativeBuildInputs = [
                   clippy-sarif
