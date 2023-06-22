@@ -11,7 +11,7 @@ carol_bls = { workspace = true }
 bincode = {  workspace = true }
 carol_guest_derive = { workspace = true }
 serde_json = { workspace = true }
-http_crate = { package = "http", workspace = true, default-features = false }
+http_crate = { workspace = true }
 serde = { workspace = true }
 carol_core = { workspace = true }
 
