@@ -205,11 +205,11 @@ impl Executor {
             .machine()
             .call_handle_http(
                 &mut store,
-                host_bindings::http::RequestParam {
+                &host_bindings::http::Request {
                     method: req.method().clone().try_into()?,
-                    uri: &req.uri().to_string(),
-                    headers: &[], // TODO: support headers
-                    body: &body,
+                    uri: req.uri().to_string(),
+                    headers: vec![], // TODO: support headers
+                    body,
                 },
             )
             .instrument(span.clone())

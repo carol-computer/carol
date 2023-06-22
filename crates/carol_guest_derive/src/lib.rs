@@ -371,7 +371,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             }
 
             use carol_guest::{http, bincode};
-            impl carol_guest::bind::machine::Machine for #self_ty {
+            impl carol_guest::bind::exports::machine::Machine for #self_ty {
                 fn activate(__params: Vec<u8>, __input: Vec<u8>) -> Vec<u8> {
                     #[cfg(target_arch = "wasm32")]
                     set_up_panic_hook();

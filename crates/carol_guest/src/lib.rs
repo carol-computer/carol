@@ -8,9 +8,9 @@ pub use carol_guest_derive::{activate, carol};
 pub use serde;
 pub use serde_json;
 
-pub mod bind {
+mod _bind {
     wit_bindgen::generate!({
-        world: "carol.machine",
+        world: "machine",
         path: "../../wit/v0.1.0",
         macro_export,
         export_macro_name: "set_machine",
@@ -18,10 +18,17 @@ pub mod bind {
     });
 }
 
+pub mod bind {
+    pub use super::_bind::carol::machine;
+    pub use super::_bind::exports;
+}
+
+pub use bind::exports::machine::Machine;
+
 pub mod http {
     use super::*;
     use alloc::{string::ToString, vec::Vec};
-    pub use bind::http::{Method, Request, Response};
+    pub use bind::machine::http::{Method, Request, Response};
 
     impl From<Method> for http_crate::Method {
         fn from(value: Method) -> Self {
