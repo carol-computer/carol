@@ -5,9 +5,9 @@ env:
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
   flake:
@@ -33,7 +33,7 @@ jobs:
         uses: mikepenz/action-junit-report@v3
         if: success() || failure()
         with:
-          report_paths: 'test_result/nextest/default/junit.xml' # as per .config/nextest.toml
+          report_paths: "test_result/nextest/default/junit.xml" # as per .config/nextest.toml
       - name: Clippy
         run: |
           system="$(nix eval --impure --raw --expr builtins.currentSystem)"
