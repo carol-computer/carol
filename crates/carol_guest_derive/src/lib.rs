@@ -365,7 +365,7 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             fn set_up_panic_hook() {
                 let original_hook = std::panic::take_hook();
                 std::panic::set_hook(Box::new(move |panic_info| {
-                    carol_guest::bind::log::set_panic_message(&panic_info.to_string());
+                    carol_guest::bind::carol::machine::log::set_panic_message(&panic_info.to_string());
                     (original_hook)(panic_info)
                 }));
             }
