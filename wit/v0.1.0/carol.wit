@@ -1,3 +1,5 @@
+package carol:machine@0.1.0
+
 interface http {
     enum method {
        get,
@@ -37,13 +39,13 @@ interface machines {
 }
 
 world machine {
-    import http: self.http
-    import global: self.global
-    import log: self.log
-    import machines: self.machines
+    import http
+    import global
+    import log
+    import machines
 
     export machine: interface {
-        use self.http.{request as http-request,response as http-response}
+        use http.{request as http-request,response as http-response}
         activate: func(machine-params: list<u8>, input: list<u8>) -> list<u8>
         handle-http: func(request: http-request) -> http-response
     }

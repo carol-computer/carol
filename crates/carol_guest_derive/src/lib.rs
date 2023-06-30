@@ -365,13 +365,13 @@ fn carol_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             fn set_up_panic_hook() {
                 let original_hook = std::panic::take_hook();
                 std::panic::set_hook(Box::new(move |panic_info| {
-                    carol_guest::bind::log::set_panic_message(&panic_info.to_string());
+                    carol_guest::bind::carol::machine::log::set_panic_message(&panic_info.to_string());
                     (original_hook)(panic_info)
                 }));
             }
 
             use carol_guest::{http, bincode};
-            impl carol_guest::bind::machine::Machine for #self_ty {
+            impl carol_guest::bind::exports::machine::Machine for #self_ty {
                 fn activate(__params: Vec<u8>, __input: Vec<u8>) -> Vec<u8> {
                     #[cfg(target_arch = "wasm32")]
                     set_up_panic_hook();

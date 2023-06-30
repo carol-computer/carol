@@ -19,9 +19,9 @@ members = [
 edition = "2021"
 
 [workspace.dependencies]
-wit-bindgen = { version = "0.6", features = ['default'] }
-wasmtime = { version = "8", features = ["component-model"] }
-wit-component = "0.9.0"
+wit-bindgen = { version = "0.7", features = ['default'] }
+wasmtime = { version = "10", features = ["component-model"] }
+wit-component = "0.11.0"
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive", "alloc"], default-features = false }
 bincode = {  version = "2.0.0-rc.3", features = ["serde", "alloc", "derive"], default-features = false }
@@ -34,7 +34,7 @@ carol_http = { path = "crates/carol_http" }
 carol_bls = { path = "crates/carol_bls" }
 reqwest = {  version = "0.11.16", features = ["json", "rustls-tls", "blocking"], default-features = false }
 hyper = { version = "0.14", default-features = false }
-http_crate = { package = "http", version = "0.2" }
+http_crate = { package = "http", version = "0.2.9" }
 clap = {  version = "4", features = ["derive"] }
 anyhow = "1"
 futures-core = "0.3"

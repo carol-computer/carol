@@ -8,7 +8,7 @@ use tracing::{event, Level};
 use wasmtime::component::bindgen;
 
 bindgen!({
-    world: "carol.machine",
+    world: "machine",
     path: "../../wit/v0.1.0",
     tracing: true,
     async: true,
@@ -46,9 +46,11 @@ impl Environment {
     }
 }
 
+pub use carol::machine::*;
+
 #[async_trait]
 impl http::Host for Host {
-    async fn execute(&mut self, request: http::RequestResult) -> anyhow::Result<http::Response> {
+    async fn execute(&mut self, request: http::Request) -> anyhow::Result<http::Response> {
         let client = self.env.http_client();
         let request = request.try_into()?;
         let res = client.execute(request).await?;
@@ -144,26 +146,10 @@ impl machines::Host for Host {
     }
 }
 
-impl<'a> TryFrom<http::RequestParam<'a>> for http_crate::Request<hyper::Body> {
+impl TryFrom<http::Request> for http_crate::Request<hyper::Body> {
     type Error = anyhow::Error;
 
-    fn try_from(guest_request: http::RequestParam) -> Result<Self, Self::Error> {
-        let mut builder = http_crate::Request::builder()
-            .method(guest_request.method)
-            .uri(guest_request.uri);
-
-        for (key, value) in guest_request.headers {
-            builder = builder.header(*key, *value);
-        }
-
-        Ok(builder.body(hyper::Body::from(guest_request.body.to_vec()))?)
-    }
-}
-
-impl TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
-    type Error = anyhow::Error;
-
-    fn try_from(guest_request: http::RequestResult) -> Result<Self, Self::Error> {
+    fn try_from(guest_request: http::Request) -> Result<Self, Self::Error> {
         let mut builder = http_crate::Request::builder()
             .method(guest_request.method)
             .uri(guest_request.uri);
@@ -176,19 +162,10 @@ impl TryFrom<http::RequestResult> for http_crate::Request<hyper::Body> {
     }
 }
 
-impl<'a> TryFrom<http::RequestParam<'a>> for reqwest::Request {
+impl TryFrom<http::Request> for reqwest::Request {
     type Error = anyhow::Error;
 
-    fn try_from(value: http::RequestParam) -> Result<Self, Self::Error> {
-        let http_req: http_crate::Request<hyper::Body> = value.try_into()?;
-        Ok(http_req.try_into()?)
-    }
-}
-
-impl TryFrom<http::RequestResult> for reqwest::Request {
-    type Error = anyhow::Error;
-
-    fn try_from(value: http::RequestResult) -> Result<Self, Self::Error> {
+    fn try_from(value: http::Request) -> Result<Self, Self::Error> {
         let http_req: http_crate::Request<hyper::Body> = value.try_into()?;
         Ok(http_req.try_into()?)
     }

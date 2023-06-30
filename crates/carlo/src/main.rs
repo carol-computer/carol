@@ -137,8 +137,9 @@ impl BuildOpts {
                 "--release",
                 "--crate-type=cdylib",
             ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stdout(Stdio::piped());
+
+        eprintln!("Running {:?}", cmd);
 
         let mut proc = cmd.spawn().context("Couldn't spawn cargo rustc")?;
 
@@ -149,7 +150,14 @@ impl BuildOpts {
 
         let output = proc
             .wait_with_output()
-            .context("Couldn't read cargo rustc exit status or output")?;
+            .context("Couldn't read `cargo rustc` output")?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                "`cargo rustc` exited unsuccessfully ({})",
+                output.status
+            ));
+        }
 
         // Find the last compiler artifact message
         let final_artifact_message = messages
@@ -157,20 +165,22 @@ impl BuildOpts {
             .rev()
             .find_map(|message| match message {
                 Message::CompilerArtifact(artifact) => Some(artifact),
-                // Message::CompilerMessage(message) => Some(Err(anyhow!("{message}"))), // FIXME is this appropriate, with ?? at the end?
                 _ => None,
             })
             .ok_or_else(|| {
-                let err = anyhow!("{}", String::from_utf8_lossy(&output.stderr));
-                err.context(
-                    "No compiler artifact messages in output, could not find wasm output file.",
-                )
+                anyhow!("No compiler artifact messages in output, could not find wasm output file.")
             })?;
 
         if final_artifact_message.filenames.len() != 1 {
             return Err(anyhow!(
-                "Expected a single wasm artifact in files, but got {}",
-                final_artifact_message.filenames.len()
+                "Expected a single wasm artifact in files, but got:\n{}",
+                final_artifact_message
+                    .filenames
+                    .iter()
+                    .enumerate()
+                    .map(|(i, name)| format!("{}: {}", i, name))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             ));
         }
 
