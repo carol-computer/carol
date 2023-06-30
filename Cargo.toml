@@ -34,7 +34,7 @@ carol_http = { path = "crates/carol_http" }
 carol_bls = { path = "crates/carol_bls" }
 reqwest = {  version = "0.11.16", features = ["json", "rustls-tls", "blocking"], default-features = false }
 hyper = { version = "0.14", default-features = false }
-http_crate = { package = "http", version = "0.2" }
+http_crate = { package = "http", version = "0.2.9" }
 clap = {  version = "4", features = ["derive"] }
 anyhow = "1"
 futures-core = "0.3"

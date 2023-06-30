@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate alloc;
 
-use ::http as http_crate;
 pub use bincode;
 pub use carol_bls as bls;
 pub use carol_guest_derive::{activate, carol};
