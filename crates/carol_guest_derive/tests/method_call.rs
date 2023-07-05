@@ -1,12 +1,12 @@
 #![allow(renamed_and_removed_lints, unknown_lints, disallowed_names)]
 use carol_guest::bind::exports::machine::Machine;
-use carol_guest_derive::{activate, carol};
+use carol_guest_derive::{activate, codec, machine};
 use core::any::Any;
 
-#[derive(bincode::Encode, bincode::Decode)]
+#[codec]
 pub struct Foo;
 
-#[carol]
+#[machine]
 impl Foo {
     #[activate]
     pub fn add(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {

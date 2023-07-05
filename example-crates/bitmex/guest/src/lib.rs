@@ -1,43 +1,35 @@
 use carol_guest::*;
 pub use time;
 
-#[derive(
-    Debug, Clone, Copy, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy)]
+#[codec]
 pub struct AttestIndexPrice<S> {
     pub price: u64,
     pub signature: S,
 }
 
-#[derive(
-    Clone, Copy, Debug, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize,
-)]
-pub struct OffsetDateTime(
-    #[bincode(with_serde)]
-    #[serde(with = "time::serde::iso8601")]
-    pub time::OffsetDateTime,
-);
-
 #[derive(Clone, Debug, bincode::Encode)]
 pub struct AttestMessage {
-    pub time: OffsetDateTime,
+    #[bincode(with_serde)]
+    pub time: time::OffsetDateTime,
     pub price: u64,
     pub symbol: String,
 }
 
-#[derive(bincode::Decode, bincode::Encode)]
+#[codec]
 pub struct BitMexAttest;
 
 #[derive(bincode::Encode)]
 pub struct AttestBit<'a> {
     pub symbol: &'a str,
-    pub time: OffsetDateTime,
+    #[bincode(with_serde)]
+    pub time: time::OffsetDateTime,
     pub n_bits: u8,
     pub bit_index: u8,
     pub bit_value: bool,
 }
 
-#[carol]
+#[machine]
 impl BitMexAttest {
     /// Like [`Self::attest_to_price_at_minute`] but provides a BLS signature for every bit of the
     /// price capped to `2^n_bits - 1`. This is for use in *[Cryptographic Oracle-Based Conditional
@@ -48,7 +40,7 @@ impl BitMexAttest {
     pub fn bit_decompose_attest_to_price_at_minute(
         &self,
         cap: &(impl cap::Bls + cap::Http),
-        time: OffsetDateTime,
+        #[with_serde] time: time::OffsetDateTime,
         symbol: String,
         n_bits: u8,
     ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, String> {
@@ -80,7 +72,7 @@ impl BitMexAttest {
     pub fn attest_to_price_at_minute(
         &self,
         cap: &(impl cap::Bls + cap::Http),
-        time: OffsetDateTime,
+        #[with_serde] time: time::OffsetDateTime,
         symbol: String,
     ) -> Result<AttestIndexPrice<bls::Signature>, String> {
         let price = self.index_price_at_minute(cap, &symbol, time)?;
@@ -101,9 +93,8 @@ impl BitMexAttest {
         &self,
         cap: &impl cap::Http,
         symbol: &str,
-        time: OffsetDateTime,
+        time: time::OffsetDateTime,
     ) -> Result<u64, String> {
-        let time = time.0;
         let mut url =
             url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex").unwrap();
 
@@ -149,9 +140,9 @@ mod test {
     #[cfg(feature = "network_tests")]
     #[test]
     fn index_price_at_minute() {
-        use crate::{BitMexAttest, OffsetDateTime};
+        use crate::BitMexAttest;
         use carol_guest::TestCap;
-        let time = OffsetDateTime(time::macros::datetime!(2023-04-15 0:00 UTC));
+        let time = time::macros::datetime!(2023-04-15 0:00 UTC);
         let cap = TestCap::default();
         let index_price = BitMexAttest
             .attest_to_price_at_minute(&cap, time, ".BXBT".into())

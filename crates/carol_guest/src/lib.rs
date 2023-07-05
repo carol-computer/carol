@@ -3,7 +3,7 @@ extern crate alloc;
 
 pub use bincode;
 pub use carol_bls as bls;
-pub use carol_guest_derive::{activate, carol};
+pub use carol_guest_derive::{activate, codec, machine};
 pub use serde;
 pub use serde_json;
 

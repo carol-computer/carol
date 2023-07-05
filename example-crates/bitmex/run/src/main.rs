@@ -1,5 +1,5 @@
 use anyhow::Context;
-use bitmex_guest::{carol_activate, time, AttestIndexPrice, OffsetDateTime};
+use bitmex_guest::{carol_activate, time, AttestIndexPrice};
 use carol_bls as bls;
 use carol_host::{Executor, State};
 
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
         .load_binary_from_wasm_file("target/bitmex_guest.wasm")
         .context("loading binary. You must compile it to target/bitmex_guest.wam first!")?;
     let method = carol_activate::AttestToPriceAtMinute {
-        time: OffsetDateTime(time::OffsetDateTime::now_utc()),
+        time: time::OffsetDateTime::now_utc(),
         symbol: ".BXBT".into(),
     };
 
