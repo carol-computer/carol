@@ -92,7 +92,7 @@ pub mod cap {
     }
 
     pub trait Bls {
-        fn bls_static_public_key(&self) -> carol_bls::bls12_381::G1Affine;
+        fn bls_static_public_key(&self) -> carol_bls::PublicKey;
         fn bls_static_sign(&self, message: &[u8]) -> carol_bls::Signature;
     }
 
@@ -134,10 +134,12 @@ mod wasm {
     }
 
     impl cap::Bls for ActivateCap {
-        fn bls_static_public_key(&self) -> bls::bls12_381::G1Affine {
+        fn bls_static_public_key(&self) -> bls::PublicKey {
             let mut bytes = [0u8; 96];
             bytes.copy_from_slice(machine::global::bls_static_pubkey().as_ref());
-            carol_bls::bls12_381::G1Affine::from_uncompressed_unchecked(&bytes).unwrap()
+            bls::PublicKey(
+                carol_bls::bls12_381::G1Affine::from_uncompressed_unchecked(&bytes).unwrap(),
+            )
         }
 
         fn bls_static_sign(&self, message: &[u8]) -> carol_bls::Signature {
@@ -183,7 +185,7 @@ mod other {
     }
 
     impl cap::Bls for ActivateCap {
-        fn bls_static_public_key(&self) -> bls::bls12_381::G1Affine {
+        fn bls_static_public_key(&self) -> bls::PublicKey {
             panic!("cannot call activate outside of WASM guest environment")
         }
 
@@ -254,13 +256,13 @@ mod other {
     }
 
     impl cap::Bls for TestCap {
-        fn bls_static_public_key(&self) -> bls::bls12_381::G1Affine {
+        fn bls_static_public_key(&self) -> bls::PublicKey {
             self.bls_keypair.public_key()
         }
 
-        fn bls_static_sign(&self, message: &[u8]) -> carol_bls::Signature {
+        fn bls_static_sign(&self, message: &[u8]) -> bls::Signature {
             let machine_id = MachineId::new(BinaryId::new(b"test"), &[]);
-            carol_bls::sign(&self.bls_keypair, machine_id, message)
+            carol_bls::sign(self.bls_keypair, machine_id, message)
         }
     }
 

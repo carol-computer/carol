@@ -9,13 +9,43 @@ macro_rules! impl_fromstr_deserialize {
     ) => {
 
         impl$(<$($tpl $(:$tcl)?),*>)?  $type {
+
+            pub fn from_bytes($input: [u8; $len]) -> Option<$type> {
+                #[allow(clippy::redundant_closure_call)]
+                (|| { $block })()
+            }
+        }
+
+        $crate::impl_fromstr_deserialize!(@main name => $name, fn from_bytes$(<$($tpl $(:$tcl)?),*>)?($input: [u8;$len]) -> Option<$type> $block);
+    };
+    (name => $name:literal,
+     fn from_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($input:ident : [u8;$len:literal]) ->  $type:path $block:block
+    ) => {
+         impl$(<$($tpl $(:$tcl)?),*>)?  $type {
+
+            pub fn from_bytes($input: [u8; $len]) -> $type {
+                #[allow(clippy::redundant_closure_call)]
+                (|| { $block })()
+            }
+        }
+        $crate::impl_fromstr_deserialize!(@main name => $name, fn from_bytes$(<$($tpl $(:$tcl)?),*>)?($input: [u8;$len]) -> Option<$type> { Some($block) });
+    };
+    (
+        @main
+        name => $name:literal,
+        fn from_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($input:ident : [u8;$len:literal]) ->  Option<$type:path> $block:block
+    ) => {
+
+        impl$(<$($tpl $(:$tcl)?),*>)?  $type {
+
             pub fn from_slice(slice: &[u8]) -> Option<$type> {
                 if slice.len() != $len {
                     return None;
                 }
                 let mut $input = [0u8;$len];
                 $input.copy_from_slice(&slice[..]);
-                $block
+                #[allow(clippy::redundant_closure_call)]
+                (|| { $block })()
             }
         }
 
@@ -38,7 +68,8 @@ macro_rules! impl_fromstr_deserialize {
                     }
 
                     let $input = buf;
-                    let result = $block;
+                    #[allow(clippy::redundant_closure_call)]
+                    let result = (|| { $block })();
                     result.ok_or($crate::hex::HexError::InvalidEncoding)
                 }
             }
@@ -103,7 +134,8 @@ macro_rules! impl_fromstr_deserialize {
                                 .ok_or_else(|| $crate::serde::de::Error::invalid_length(i, &self))?;
                             }
 
-                            let result = $block;
+                            #[allow(clippy::redundant_closure_call)]
+                            let result = (|| { $block })();
                             result.ok_or($crate::serde::de::Error::custom(format_args!("invalid byte encoding, expected {}", &self as &dyn $crate::serde::de::Expected)))
                         }
                     }
@@ -114,14 +146,13 @@ macro_rules! impl_fromstr_deserialize {
             }
         }
 
-
-
         impl$(<$($tpl $(:$tcl)?),*>)? $crate::bincode::de::Decode for $type {
             fn decode<D: $crate::bincode::de::Decoder>(decoder: &mut D) -> Result<Self, $crate::bincode::error::DecodeError> {
                 use $crate::bincode::de::read::Reader;
                 let mut $input = [0u8; $len];
                 decoder.reader().read(&mut $input)?;
-                let result = $block;
+                #[allow(clippy::redundant_closure_call)]
+                let result = (|| { $block })();
                 return result.ok_or($crate::bincode::error::DecodeError::OtherString(format!("Invalid {}-byte encoding of a {}", $len, $name)));
             }
         }
@@ -139,7 +170,14 @@ macro_rules! impl_fromstr_deserialize {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_display_serialize {
-    (fn to_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($self:ident : &$type:path) -> $(&)?[u8;$len:literal] $block:block) => {
+    (fn to_bytes$(<$($tpl:ident  $(: $tcl:ident)?),*>)?($self:ident : &$type:path) -> [u8;$len:literal] $block:block) => {
+
+        impl$(<$($tpl $(:$tcl)?),*>)? $type {
+            pub fn to_bytes(&self) -> [u8; $len] {
+                let $self = self;
+                $block
+            }
+        }
 
         impl$(<$($tpl $(:$tcl)?),*>)? $crate::serde::Serialize for $type {
             fn serialize<Ser: $crate::serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {

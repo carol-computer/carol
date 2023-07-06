@@ -10,3 +10,7 @@ carol_core = { workspace = true }
 bls12_381 = { version = "0.8", features = ["experimental"] }
 rand_core = { workspace = true }
 sha2 = { workspace = true }
+
+
+[dev-dependencies]
+proptest = "1.2"
