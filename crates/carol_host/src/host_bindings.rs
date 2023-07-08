@@ -71,12 +71,7 @@ impl http::Host for Host {
 #[async_trait]
 impl global::Host for Host {
     async fn bls_static_pubkey(&mut self) -> anyhow::Result<Vec<u8>> {
-        Ok(self
-            .env
-            .bls_keypair()
-            .public_key()
-            .to_uncompressed()
-            .to_vec())
+        Ok(self.env.bls_keypair().public_key().to_bytes().to_vec())
     }
 
     async fn bls_static_sign(&mut self, message: Vec<u8>) -> anyhow::Result<Vec<u8>> {

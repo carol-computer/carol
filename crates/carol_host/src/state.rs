@@ -52,7 +52,7 @@ impl State {
         &self.executor
     }
 
-    pub fn bls_keypair(&self) -> &bls::KeyPair {
-        &self.bls_keypair
+    pub fn bls_keypair(&self) -> bls::KeyPair {
+        self.bls_keypair
     }
 }

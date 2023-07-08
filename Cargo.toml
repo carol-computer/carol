@@ -1,10 +1,8 @@
 [workspace]
 
 members = [
-    "example-crates/hello_world/run",
     "example-crates/hello_world/guest",
     "example-crates/bitmex/guest",
-    "example-crates/bitmex/run",
     "crates/carol_guest",
     "crates/carol_host",
     "crates/carol_guest_derive",

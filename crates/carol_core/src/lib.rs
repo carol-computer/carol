@@ -55,26 +55,26 @@ impl AsRef<[u8; 32]> for BinaryId {
 
 crate::impl_fromstr_deserialize! {
     name => "machine id",
-    fn from_bytes(bytes: [u8;32]) -> Option<MachineId> {
-        Some(MachineId(bytes))
+    fn from_bytes(bytes: [u8;32]) -> MachineId {
+        MachineId(bytes)
     }
 }
 
 crate::impl_display_debug_serialize! {
-    fn to_bytes(machine_id: &MachineId) -> &[u8;32] {
-        &machine_id.0
+    fn to_bytes(machine_id: &MachineId) -> [u8;32] {
+        machine_id.0
     }
 }
 
 crate::impl_fromstr_deserialize! {
     name => "binary id",
-    fn from_bytes(bytes: [u8;32]) -> Option<BinaryId> {
-        Some(BinaryId(bytes))
+    fn from_bytes(bytes: [u8;32]) -> BinaryId {
+        BinaryId(bytes)
     }
 }
 
 crate::impl_display_debug_serialize! {
-    fn to_bytes(binary_id: &BinaryId) -> &[u8;32] {
-        &binary_id.0
+    fn to_bytes(binary_id: &BinaryId) -> [u8;32] {
+        binary_id.0
     }
 }
