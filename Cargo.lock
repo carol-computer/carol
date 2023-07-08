@@ -183,19 +183,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitmex_run"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode 2.0.0-rc.3",
- "bitmex_guest",
- "carol_bls",
- "carol_host",
- "rand",
- "tokio",
-]
-
-[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -984,19 +971,6 @@ name = "hello_world"
 version = "0.1.0"
 dependencies = [
  "carol_guest",
-]
-
-[[package]]
-name = "hello_world_run"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode 2.0.0-rc.3",
- "carol_bls",
- "carol_host",
- "hello_world",
- "rand",
- "tokio",
 ]
 
 [[package]]
