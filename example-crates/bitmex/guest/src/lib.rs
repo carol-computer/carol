@@ -39,11 +39,11 @@ impl BitMexAttest {
     #[activate]
     pub fn bit_decompose_attest_to_price_at_minute(
         &self,
-        cap: &(impl cap::Bls + cap::Http),
+        cap: &(impl bls::Cap + http::Cap),
         #[with_serde] time: time::OffsetDateTime,
         symbol: String,
         n_bits: u8,
-    ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, String> {
+    ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, http::Error> {
         let price = self.index_price_at_minute(cap, &symbol, time)?;
 
         let capped_price = price.min((1 << n_bits) - 1);
@@ -71,10 +71,10 @@ impl BitMexAttest {
     #[activate]
     pub fn attest_to_price_at_minute(
         &self,
-        cap: &(impl cap::Bls + cap::Http),
+        cap: &(impl bls::Cap + http::Cap),
         #[with_serde] time: time::OffsetDateTime,
         symbol: String,
-    ) -> Result<AttestIndexPrice<bls::Signature>, String> {
+    ) -> Result<AttestIndexPrice<bls::Signature>, http::Error> {
         let price = self.index_price_at_minute(cap, &symbol, time)?;
         let message = AttestMessage {
             price,
@@ -91,12 +91,12 @@ impl BitMexAttest {
 
     pub fn index_price_at_minute(
         &self,
-        cap: &impl cap::Http,
+        cap: &impl http::Cap,
         symbol: &str,
         time: time::OffsetDateTime,
-    ) -> Result<u64, String> {
-        let mut url =
-            url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex").unwrap();
+    ) -> Result<u64, http::Error> {
+        let mut url = url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex")
+            .expect("valid url");
 
         #[derive(serde::Serialize)]
         struct Filter<'a> {
@@ -129,7 +129,7 @@ impl BitMexAttest {
             .append_pair("filter", &filter)
             .append_pair("columns", "lastPrice,timestamp"); // only necessary fields
 
-        let response = cap.http_get(url.as_str());
+        let response = cap.http_get(url.as_str())?;
         let price_at_time = serde_json::from_slice::<[Price; 1]>(&response.body).unwrap()[0];
         Ok(price_at_time.last_price.floor() as u64)
     }

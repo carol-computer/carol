@@ -1,6 +1,18 @@
 package carol:machine@0.1.0
 
 interface http {
+    variant error {
+      // The url was invalid
+      invalid-url(string),
+      // One or more of the headers was invalid
+      invalid-header(string),
+      // The request timed out
+      timeout,
+      // There was a connection error
+      connection(string),
+      // An unexpected error occurred
+      unexpected(string)
+   }
     enum method {
        get,
        post,
@@ -11,16 +23,16 @@ interface http {
     record request {
          method: method,
          uri: string,
-         headers: list<tuple<string,string>>,
+         headers: list<tuple<string,list<u8>>>,
          body: list<u8>,
     }
 
     record response {
-        headers: list<tuple<string,string>>,
+        headers: list<tuple<string,list<u8>>>,
         body: list<u8>,
         status: u16
     }
-    execute: func(request: request) -> response
+    execute: func(request: request) -> result<response,error>
 }
 
 interface global {
@@ -35,7 +47,15 @@ interface log {
 
 interface machines {
     type machine-id = list<u8>
-    self-activate: func(input: list<u8>) -> result<list<u8>, string>
+
+    record panic-info {
+        reason: string,
+        machine: machine-id
+    }
+    variant error {
+        panic(panic-info)
+    }
+    self-activate: func(input: list<u8>) -> result<list<u8>, error>
 }
 
 world machine {
@@ -45,8 +65,9 @@ world machine {
     import machines
 
     export machine: interface {
-        use http.{request as http-request,response as http-response}
         activate: func(machine-params: list<u8>, input: list<u8>) -> list<u8>
+
+        use http.{request as http-request,response as http-response}
         handle-http: func(request: http-request) -> http-response
     }
 }

@@ -1,4 +1,4 @@
-use carol_guest::{activate, cap, codec, machine};
+use carol_guest::{activate, codec, log, machine};
 
 #[codec]
 pub struct HelloWorld;
@@ -6,7 +6,7 @@ pub struct HelloWorld;
 #[machine]
 impl HelloWorld {
     #[activate]
-    pub fn say(&self, cap: &impl cap::Log, message: String) -> String {
+    pub fn say(&self, cap: &impl log::Cap, message: String) -> String {
         let response = format!("hello {}", message);
         cap.log_info(&response);
         response

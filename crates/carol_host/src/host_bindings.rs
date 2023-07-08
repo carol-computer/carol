@@ -50,21 +50,28 @@ pub use carol::machine::*;
 
 #[async_trait]
 impl http::Host for Host {
-    async fn execute(&mut self, request: http::Request) -> anyhow::Result<http::Response> {
+    async fn execute(
+        &mut self,
+        request: http::Request,
+    ) -> anyhow::Result<Result<http::Response, http::Error>> {
         let client = self.env.http_client();
-        let request = request.try_into()?;
-        let res = client.execute(request).await?;
-        let headers = res
-            .headers()
-            .into_iter()
-            .map(|(key, value)| Ok((key.to_string(), value.to_str()?.to_string())))
-            .collect::<Result<_, anyhow::Error>>()?;
-        let response = http::Response {
-            status: res.status().as_u16(),
-            body: res.bytes().await?.to_vec(),
-            headers,
-        };
-        Ok(response)
+        let inner_result = (|| async {
+            let request: reqwest::Request = request.try_into()?;
+            let res = client.execute(request).await?;
+            let headers = res
+                .headers()
+                .into_iter()
+                .map(|(key, value)| Ok((key.to_string(), value.as_bytes().to_vec())))
+                .collect::<Result<_, http::Error>>()?;
+            let response = http::Response {
+                status: res.status().as_u16(),
+                body: res.bytes().await?.to_vec(),
+                headers,
+            };
+            Ok(response)
+        })()
+        .await;
+        Ok(inner_result)
     }
 }
 
@@ -100,7 +107,10 @@ impl log::Host for Host {
 
 #[async_trait]
 impl machines::Host for Host {
-    async fn self_activate(&mut self, input: Vec<u8>) -> anyhow::Result<Result<Vec<u8>, String>> {
+    async fn self_activate(
+        &mut self,
+        input: Vec<u8>,
+    ) -> anyhow::Result<Result<Vec<u8>, machines::Error>> {
         let (binary_id, params) = self
             .state
             .get_machine(self.machine_id)
@@ -127,7 +137,10 @@ impl machines::Host for Host {
                     input = carol_core::hex::encode(&input),
                     "self_activate'd guest failed"
                 );
-                Ok(Err(e.to_string()))
+                Ok(Err(machines::Error::Panic(machines::PanicInfo {
+                    reason: e.to_string(),
+                    machine: self.machine_id.to_bytes().to_vec(),
+                })))
             }
             Err(e) => {
                 event!(
@@ -142,7 +155,7 @@ impl machines::Host for Host {
 }
 
 impl TryFrom<http::Request> for http_crate::Request<hyper::Body> {
-    type Error = anyhow::Error;
+    type Error = http::Error;
 
     fn try_from(guest_request: http::Request) -> Result<Self, Self::Error> {
         let mut builder = http_crate::Request::builder()
@@ -158,11 +171,40 @@ impl TryFrom<http::Request> for http_crate::Request<hyper::Body> {
 }
 
 impl TryFrom<http::Request> for reqwest::Request {
-    type Error = anyhow::Error;
+    type Error = http::Error;
 
     fn try_from(value: http::Request) -> Result<Self, Self::Error> {
         let http_req: http_crate::Request<hyper::Body> = value.try_into()?;
-        Ok(http_req.try_into()?)
+        // XXX: From looking at source it looks like this error can only happen because the uri does
+        // not fit the stricter requirements of reqwest.
+        http_req
+            .try_into()
+            .map_err(|e: reqwest::Error| http::Error::InvalidUrl(e.to_string()))
+    }
+}
+
+impl From<http_crate::Error> for http::Error {
+    fn from(e: http_crate::Error) -> Self {
+        use http_crate::{header, uri};
+        if e.is::<uri::InvalidUri>() || e.is::<uri::InvalidUriParts>() {
+            http::Error::InvalidUrl(e.to_string())
+        } else if e.is::<header::InvalidHeaderName>() || e.is::<header::InvalidHeaderValue>() {
+            http::Error::InvalidHeader(e.to_string())
+        } else {
+            http::Error::Unexpected(e.to_string())
+        }
+    }
+}
+
+impl From<reqwest::Error> for http::Error {
+    fn from(e: reqwest::Error) -> Self {
+        if e.is_timeout() {
+            http::Error::Timeout
+        } else if e.is_connect() {
+            http::Error::Connection(e.to_string())
+        } else {
+            http::Error::Unexpected(e.to_string())
+        }
     }
 }
 

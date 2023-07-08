@@ -265,11 +265,11 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 pat,
                 fat_arrow_token: Token![=>](sig_span),
                 body: Box::new(Expr::Verbatim(quote_spanned! { sig_span => {
-                        use carol_guest::{bincode, serde_json, cap::Machines};
+                        use carol_guest::{bincode, serde_json};
                         let method_struct = carol_guest::serde_json::from_slice::<#struct_path>(body).expect(#json_decode_error);
                         let method_variant = #variant_path(method_struct);
                         let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
-                        let output = match __ctx.self_activate(&binary_input) {
+                        let output = match carol_guest::machines::Cap::self_activate(&__ctx, &binary_input) {
                             Ok(output) => output,
                             Err(e) => return http::Response {
                                 headers: vec![],
