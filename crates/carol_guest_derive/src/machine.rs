@@ -1,7 +1,8 @@
+use crate::activate::HttpMethod;
 use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    parse2, parse_quote,
+    parse2, parse_quote, parse_quote_spanned,
     punctuated::Punctuated,
     spanned::Spanned,
     token::{self, Brace},
@@ -17,8 +18,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let carol_mod = format_ident!("carol_activate");
     let mut call_interface_enum = ItemEnum {
         attrs: vec![
-            parse_quote!(#[derive(carol_guest::bincode::Decode, carol_guest::bincode::Encode, carol_guest::serde::Serialize, carol_guest::serde::Deserialize, Debug, Clone)]),
-            parse_quote!(#[serde(crate = "carol_guest::serde")]),
+            parse_quote!(#[derive(carol_guest::bincode::Decode, carol_guest::bincode::Encode, Debug, Clone)]),
             parse_quote!(#[bincode(crate = "carol_guest::bincode")]),
         ],
         vis: syn::Visibility::Public(VisPublic {
@@ -37,13 +37,20 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     for item in &mut input.items {
         if let ImplItem::Method(method) = item {
-            if !method
+            let activate_attr = match method
                 .attrs
                 .iter()
-                .any(|attr| attr.path.to_token_stream().to_string() == "activate")
+                .find(|attr| attr.path.to_token_stream().to_string() == "activate")
             {
-                continue;
-            }
+                Some(activate_attr) => activate_attr,
+                None => continue,
+            };
+            let activate_opts = match parse2::<crate::activate::Opts>(activate_attr.tokens.clone())
+            {
+                Ok(activate_opts) => activate_opts,
+                Err(e) => return e.to_compile_error(),
+            };
+
             let method_name = method.sig.ident.clone();
             let sig_span = method_name.span();
             let struct_name = Ident::new(
@@ -125,12 +132,21 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 match_fields.push(match_field);
             }
 
-            let struct_def = ItemStruct {
-                attrs: vec![
+            let attrs = if activate_opts.http.is_some() {
+                vec![
                     parse_quote!(#[derive(carol_guest::bincode::Decode, carol_guest::bincode::Encode, carol_guest::serde::Serialize, carol_guest::serde::Deserialize, Debug, Clone)]),
                     parse_quote!(#[serde(crate = "carol_guest::serde")]),
                     parse_quote!(#[bincode(crate = "carol_guest::bincode")]),
-                ],
+                ]
+            } else {
+                vec![
+                    parse_quote!(#[derive(carol_guest::bincode::Decode, carol_guest::bincode::Encode, Debug, Clone)]),
+                    parse_quote!(#[bincode(crate = "carol_guest::bincode")]),
+                ]
+            };
+
+            let struct_def = ItemStruct {
+                attrs,
                 vis: syn::Visibility::Public(VisPublic {
                     pub_token: Token![pub](sig_span),
                 }),
@@ -221,69 +237,95 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 comma: None,
             });
 
-            let route = format!("/activate/{}", method.sig.ident);
+            if let Some(http_method) = activate_opts.http {
+                let route = format!("/activate/{}", method.sig.ident);
+                let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
 
-            let handle_output = match method.sig.output.clone() {
-                ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
-                    headers: vec![],
-                    status: 204,
-                    body: vec![]
-                }},
-                ReturnType::Type(_, ty) => {
-                    let bincode_decode_output_expect = format!(
-                        "#[activate] bincode decoding the output of {} to type {}",
-                        method_name,
-                        ty.to_token_stream()
-                    );
-                    let json_encode_output_expect = format!(
-                        "#[activate] JSON encoding the output of {} from type {}",
-                        method_name,
-                        ty.to_token_stream()
-                    );
-                    quote_spanned! { ty.span() =>  {
-                        let (decoded_output, _) : (#ty, _) = bincode::decode_from_slice(&output, bincode::config::standard()).expect(#bincode_decode_output_expect);
-                        let json_encoded_output = serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
-                        http::Response {
-                            headers: vec![],
-                            status: 200,
-                            body: json_encoded_output
-                        }
-                    }}
-                }
-            };
+                let decode_code = match http_method {
+                    HttpMethod::Post => {
+                        // let json_decode_error = format!(
+                        //     "#[activate] decoding HTTP JSON body of call to {}",
+                        //     method_name
+                        // );
+                        quote_spanned! { sig_span => {
+                            carol_guest::serde_json::from_slice::<#struct_path>(body).map_err(|e| format!("{:?}", e))
+                        }}
+                    }
+                    HttpMethod::Get => {
+                        // let url_decode_error = format!("#[activate] decoding query paramters to {}", method_name);
+                        quote_spanned! { sig_span => {
+                            carol_guest::serde_urlencoded::from_str::<#struct_path>(query).map_err(|e| e.to_string())
+                        }}
+                    }
+                };
 
-            let pat = parse_quote! { #route };
-            let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
-            let json_decode_error = format!(
-                "#[carol] decoding JSON to {}",
-                struct_path.to_token_stream().to_string().replace(' ', "")
-            );
-            let bincode_encode_error =
-                format!("#[carol] bincode encoding input to {}", method_name);
-            json_match_arms.push(Arm {
-                attrs: vec![],
-                pat,
-                fat_arrow_token: Token![=>](sig_span),
-                body: Box::new(Expr::Verbatim(quote_spanned! { sig_span => {
-                        use carol_guest::{bincode, serde_json};
-                        let method_struct = carol_guest::serde_json::from_slice::<#struct_path>(body).expect(#json_decode_error);
-                        let method_variant = #variant_path(method_struct);
-                        let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
-                        let output = match carol_guest::machines::Cap::self_activate(&__ctx, &binary_input) {
-                            Ok(output) => output,
-                            Err(e) => return http::Response {
+                let bincode_encode_error =
+                    format!("#[activate] bincode encoding input to {}", method_name);
+
+                let handle_output = match method.sig.output.clone() {
+                    ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
+                        headers: vec![],
+                        status: 204,
+                        body: vec![]
+                    }},
+                    ReturnType::Type(_, ty) => {
+                        let bincode_decode_output_expect = format!(
+                            "#[activate] bincode decoding the output of {} to type {}",
+                            method_name,
+                            ty.to_token_stream()
+                        );
+                        let json_encode_output_expect = format!(
+                            "#[activate] JSON encoding the output of {} from type {}",
+                            method_name,
+                            ty.to_token_stream()
+                        );
+                        quote_spanned! { ty.span() =>  {
+                            let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
+                            let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
+                            http::Response {
                                 headers: vec![],
-                                body: format!("HTTP handler failed to self-activate via {}: {}", #route, e).as_bytes().to_vec(),
-                                status: 500,
+                                status: 200,
+                                body: json_encoded_output
                             }
-                        };
+                        }}
+                    }
+                };
 
-                        #handle_output
-                }})),
-                comma: None,
-                guard: None
-            });
+                let arm_body = parse_quote_spanned! { sig_span => {
+                    let method_struct = #decode_code;
+                    let method_struct = match method_struct {
+                        Ok(method_struct) => method_struct,
+                        Err(e) => return http::Response {
+                            headers: vec![],
+                            body: e.as_bytes().to_vec(),
+                            status: 400,
+                        }
+                    };
+                    let method_variant = #variant_path(method_struct);
+                    let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
+                    let output = match carol_guest::machines::Cap::self_activate(&__ctx, &binary_input) {
+                        Ok(output) => output,
+                        Err(e) => return http::Response {
+                            headers: vec![],
+                            body: format!("HTTP handler failed to self-activate via {}: {}", #route, e).as_bytes().to_vec(),
+                            status: 500,
+                        }
+                    };
 
+                    #handle_output
+
+                }};
+                let pat = parse_quote! { #route };
+
+                json_match_arms.push(Arm {
+                    attrs: vec![],
+                    pat,
+                    fat_arrow_token: Token![=>](sig_span),
+                    body: arm_body,
+                    comma: None,
+                    guard: None,
+                });
+            }
             call_interface_enum.variants.push(variant);
         }
     }
@@ -314,12 +356,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
     let self_ty = input.self_ty.clone();
     let params_decode_expect = format!(
-        "#[carol] bincode decoding parameters as {}",
+        "#[machine] bincode decoding parameters as {}",
         self_ty.to_token_stream().to_string().replace(' ', "")
     );
     let enum_path: Path = parse_quote!(#carol_mod::#enum_name);
     let input_decode_expect = format!(
-        "#[carol] bincode decoding input as {}",
+        "#[machine] bincode decoding input as {}",
         enum_path.to_token_stream().to_string().replace(' ', "")
     );
 
@@ -367,6 +409,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
                     let uri = request.uri();
                     let mut path = uri.path();
+                    let query = uri.query().unwrap_or("");
                     let body = &request.body;
 
                     #json_match_stmt

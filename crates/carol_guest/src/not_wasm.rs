@@ -103,6 +103,6 @@ pub struct HttpHandlerCap;
 
 impl machines::Cap for HttpHandlerCap {
     fn self_activate(&self, _input: &[u8]) -> Result<Vec<u8>, machines::Error> {
-        todo!("we can't do activations outside of carol guest environments yeth")
+        todo!("we can't do activations outside of carol guest environments yet")
     }
 }

@@ -36,7 +36,7 @@ impl BitMexAttest {
     /// Payments]* like schemes.
     ///
     /// [Cryptographic Oracle-Based Conditional Payments]: https://eprint.iacr.org/2022/499
-    #[activate]
+    #[activate(http(POST))]
     pub fn bit_decompose_attest_to_price_at_minute(
         &self,
         cap: &(impl bls::Cap + http::Cap),
@@ -68,7 +68,7 @@ impl BitMexAttest {
 
     /// Provide a single BLS signature over rounded down price of `symbol` at the minute at
     /// described at `time` (seconds are ignored).
-    #[activate]
+    #[activate(http(POST))]
     pub fn attest_to_price_at_minute(
         &self,
         cap: &(impl bls::Cap + http::Cap),
