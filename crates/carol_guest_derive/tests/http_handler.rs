@@ -22,7 +22,12 @@ impl Foo {
     }
 
     #[activate(http(GET "/other/path"))]
-    pub fn other_path(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
+    pub fn get_other_path(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
+        lhs + rhs
+    }
+
+    #[activate(http(POST "/other/path"))]
+    pub fn post_other_path(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
         lhs + rhs
     }
 
@@ -58,11 +63,22 @@ fn get_request() {
 
 #[test]
 #[should_panic]
-fn custom_path() {
+fn custom_path_get() {
     Foo::handle_http(http::Request {
         method: http::Method::Get,
         uri: "/other/path?lhs=4&rhs=3".into(),
         body: vec![],
+        headers: vec![],
+    });
+}
+
+#[test]
+#[should_panic]
+fn custom_path_post() {
+    Foo::handle_http(http::Request {
+        method: http::Method::Post,
+        uri: "/other/path".into(),
+        body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
         headers: vec![],
     });
 }
@@ -89,6 +105,19 @@ fn get_request_invalid_params() {
     });
 
     assert_eq!(response.status, 400);
+}
+
+#[test]
+fn method_not_allowed() {
+    let response = Foo::handle_http(http::Request {
+        method: http::Method::Post,
+        uri: "/activate/post_get".into(),
+        body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
+        headers: vec![],
+    });
+
+    assert_eq!(response.status, 405);
+    assert_eq!(response.headers, vec![("Allow".into(), b"GET".to_vec())]);
 }
 
 #[test]

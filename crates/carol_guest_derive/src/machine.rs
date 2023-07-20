@@ -238,27 +238,28 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             });
 
             if let Some(http_opt) = activate_opts.http {
-                let route_pat = syn::Pat::Verbatim(match http_opt.path {
-                    Some(litstr) => litstr.to_token_stream(),
+                let route_method_ident = match http_opt.method {
+                    HttpMethod::Post => format_ident!("Post"),
+                    HttpMethod::Get => format_ident!("Get"),
+                };
+                let route_path = match http_opt.path {
+                    Some(litstr) => litstr,
                     None => {
                         let default_route = format!("/activate/{}", method.sig.ident);
-                        parse_quote! { #default_route }
+                        parse_quote_spanned! { sig_span => #default_route }
                     }
-                });
+                };
+
+                let route_pat = quote_spanned! { sig_span => ( carol_guest::http::Method::#route_method_ident, #route_path ) };
                 let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
 
                 let decode_code = match http_opt.method {
                     HttpMethod::Post => {
-                        // let json_decode_error = format!(
-                        //     "#[activate] decoding HTTP JSON body of call to {}",
-                        //     method_name
-                        // );
                         quote_spanned! { sig_span => {
                             carol_guest::serde_json::from_slice::<#struct_path>(body).map_err(|e| format!("{:?}", e))
                         }}
                     }
                     HttpMethod::Get => {
-                        // let url_decode_error = format!("#[activate] decoding query paramters to {}", method_name);
                         quote_spanned! { sig_span => {
                             carol_guest::serde_urlencoded::from_str::<#struct_path>(query).map_err(|e| e.to_string())
                         }}
@@ -313,7 +314,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                         Ok(output) => output,
                         Err(e) => return http::Response {
                             headers: vec![],
-                            body: format!("HTTP handler failed to self-activate via {}: {}", #route_pat, e).as_bytes().to_vec(),
+                            body: format!("HTTP handler failed to self-activate via {}, {}: {}", stringify!(#route_method_ident), #route_path, e).as_bytes().to_vec(),
                             status: 500,
                         }
                     };
@@ -324,7 +325,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
                 json_match_arms.push(Arm {
                     attrs: vec![],
-                    pat: route_pat,
+                    pat: syn::Pat::Verbatim(route_pat),
                     fat_arrow_token: Token![=>](sig_span),
                     body: arm_body,
                     comma: None,
@@ -354,7 +355,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let json_match_stmt = Expr::Match(ExprMatch {
         attrs: vec![],
         match_token: Token![match](Span::call_site()),
-        expr: Box::new(Expr::Verbatim(quote! { path })),
+        expr: Box::new(Expr::Verbatim(quote! { (request.method, path) })),
         brace_token: token::Brace::default(),
         arms: json_match_arms,
     });
