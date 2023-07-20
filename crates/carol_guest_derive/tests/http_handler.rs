@@ -21,6 +21,11 @@ impl Foo {
         lhs + rhs
     }
 
+    #[activate(http(GET "/other/path"))]
+    pub fn other_path(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
+        lhs + rhs
+    }
+
     #[activate]
     pub fn no_http(&self, _cap: &impl Any, _arg: NoSerde) {
         unreachable!()
@@ -46,6 +51,17 @@ fn get_request() {
     let _response = Foo::handle_http(http::Request {
         method: http::Method::Get,
         uri: "/activate/get_add?lhs=3&rhs=4".into(),
+        body: vec![],
+        headers: vec![],
+    });
+}
+
+#[test]
+#[should_panic]
+fn custom_path() {
+    Foo::handle_http(http::Request {
+        method: http::Method::Get,
+        uri: "/other/path?lhs=4&rhs=3".into(),
         body: vec![],
         headers: vec![],
     });

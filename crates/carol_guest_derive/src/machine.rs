@@ -237,11 +237,17 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 comma: None,
             });
 
-            if let Some(http_method) = activate_opts.http {
-                let route = format!("/activate/{}", method.sig.ident);
+            if let Some(http_opt) = activate_opts.http {
+                let route_pat = syn::Pat::Verbatim(match http_opt.path {
+                    Some(litstr) => litstr.to_token_stream(),
+                    None => {
+                        let default_route = format!("/activate/{}", method.sig.ident);
+                        parse_quote! { #default_route }
+                    }
+                });
                 let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
 
-                let decode_code = match http_method {
+                let decode_code = match http_opt.method {
                     HttpMethod::Post => {
                         // let json_decode_error = format!(
                         //     "#[activate] decoding HTTP JSON body of call to {}",
@@ -307,7 +313,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                         Ok(output) => output,
                         Err(e) => return http::Response {
                             headers: vec![],
-                            body: format!("HTTP handler failed to self-activate via {}: {}", #route, e).as_bytes().to_vec(),
+                            body: format!("HTTP handler failed to self-activate via {}: {}", #route_pat, e).as_bytes().to_vec(),
                             status: 500,
                         }
                     };
@@ -315,11 +321,10 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     #handle_output
 
                 }};
-                let pat = parse_quote! { #route };
 
                 json_match_arms.push(Arm {
                     attrs: vec![],
-                    pat,
+                    pat: route_pat,
                     fat_arrow_token: Token![=>](sig_span),
                     body: arm_body,
                     comma: None,

@@ -1,4 +1,3 @@
-use proc_macro2::Span;
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{token, Token};
@@ -12,11 +11,16 @@ pub fn activate(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
 #[derive(Default)]
 pub struct Opts {
-    pub http: Option<HttpMethod>,
+    pub http: Option<Http>,
 }
 
 pub enum Opt {
-    Http(HttpMethod),
+    Http(Http),
+}
+
+pub struct Http {
+    pub method: HttpMethod,
+    pub path: Option<syn::LitStr>,
 }
 
 pub enum HttpMethod {
@@ -55,8 +59,7 @@ impl Parse for Opt {
             if input.peek(token::Paren) {
                 let content;
                 syn::parenthesized!(content in input);
-                let http_method = content.parse::<HttpMethod>()?;
-                Ok(Opt::Http(http_method))
+                Ok(Opt::Http(content.parse::<Http>()?))
             } else {
                 Err(Error::new(
                     input.span(),
@@ -69,19 +72,29 @@ impl Parse for Opt {
     }
 }
 
-impl Parse for HttpMethod {
+impl Parse for Http {
     fn parse(input: ParseStream) -> Result<Self> {
-        let span = Span::call_site();
         let l = input.lookahead1();
-        if l.peek(http_methods::GET) {
+        let method = if l.peek(http_methods::GET) {
             input.parse::<http_methods::GET>()?;
-            Ok(HttpMethod::Get)
+            HttpMethod::Get
         } else if l.peek(http_methods::POST) {
             input.parse::<http_methods::POST>()?;
-            Ok(HttpMethod::Post)
+            HttpMethod::Post
         } else {
-            return Err(Error::new(span, "Expecting either GET or POST"));
-        }
+            return Err(l.error());
+        };
+        let l = input.lookahead1();
+
+        let path = if l.peek(syn::LitStr) {
+            Some(input.parse::<syn::LitStr>()?)
+        } else if input.is_empty() {
+            None
+        } else {
+            return Err(l.error());
+        };
+
+        Ok(Http { method, path })
     }
 }
 
