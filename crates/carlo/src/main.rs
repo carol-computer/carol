@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::Message;
-use carol_core::{BinaryId, MachineId};
+use carol_core::BinaryId;
 use carol_host::Executor;
 use clap::{Args, Parser, Subcommand};
 use clap_cargo::Workspace;
@@ -82,6 +82,10 @@ struct CreateOpts {
 
     #[clap(flatten)]
     implied_upload: UploadOpts,
+
+    /// output the url rather than the machine id
+    #[clap(long, short)]
+    url: bool,
 }
 
 #[derive(Args, Debug)]
@@ -249,7 +253,7 @@ impl UploadOpts {
 }
 
 impl CreateOpts {
-    fn run(&self) -> anyhow::Result<MachineId> {
+    fn run(&self) -> anyhow::Result<String> {
         let client = Client::new(self.server.carol_url.clone());
 
         let binary_id = match self.binary_id {
@@ -262,7 +266,12 @@ impl CreateOpts {
 
         let response = client.create_machine(&binary_id)?;
         let machine_id = response.id;
-        Ok(machine_id)
+
+        if self.url {
+            Ok(format!("{}/machines/{}", self.server.carol_url, machine_id))
+        } else {
+            Ok(machine_id.to_string())
+        }
     }
 }
 

@@ -6,8 +6,8 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{self, Brace},
-    Arm, Expr, ExprMatch, ExprMethodCall, ExprPath, Field, FieldPat, Fields, FieldsNamed,
-    FieldsUnnamed, Generics, ImplItem, ItemEnum, ItemStruct, Pat, PatStruct, PatTuple,
+    Arm, Attribute, Expr, ExprMatch, ExprMethodCall, ExprPath, Field, FieldPat, Fields,
+    FieldsNamed, FieldsUnnamed, Generics, ImplItem, ItemEnum, ItemStruct, Pat, PatStruct, PatTuple,
     PatTupleStruct, Path, PathSegment, ReturnType, Token, Type, TypePath, Variant, VisPublic,
     Visibility,
 };
@@ -31,9 +31,15 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         variants: Punctuated::default(),
     };
 
+    let machine_description = match extract_docs(&input.attrs) {
+        Ok(machine_description) => machine_description,
+        Err(e) => return e.to_compile_error(),
+    };
+
     let mut match_arms: Vec<Arm> = vec![];
-    let mut json_match_arms: Vec<Arm> = vec![];
+    let mut http_match_arms: Vec<Arm> = vec![];
     let mut method_structs = vec![];
+    let mut html_doc_list = crate::html::HttpCallList::default();
 
     for item in &mut input.items {
         if let ImplItem::Method(method) = item {
@@ -45,6 +51,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 Some(activate_attr) => activate_attr,
                 None => continue,
             };
+
+            let method_docs = match extract_docs(&method.attrs) {
+                Ok(method_docs) => method_docs,
+                Err(e) => return e.to_compile_error(),
+            };
+
             let activate_opts = match parse2::<crate::activate::Opts>(activate_attr.tokens.clone())
             {
                 Ok(activate_opts) => activate_opts,
@@ -87,13 +99,17 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     }
                 }
             }
-
+            let mut http_doc_params: Vec<(String, String)> = vec![];
             for fn_arg in inputs {
                 let span = fn_arg.span();
                 let (field, match_field) = match fn_arg {
                     syn::FnArg::Typed(fn_arg) => match fn_arg.pat.as_mut() {
                         syn::Pat::Ident(pat_ident) => {
                             let mut attrs = vec![];
+                            http_doc_params.push((
+                                pat_ident.ident.to_string(),
+                                fn_arg.ty.to_token_stream().to_string().replace(" ", ""),
+                            ));
                             for attr in fn_arg.attrs.drain(..) {
                                 if attr.path.get_ident().map(|ident| ident.to_string())
                                     == Some("with_serde".into())
@@ -242,12 +258,23 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     HttpMethod::Post => format_ident!("Post"),
                     HttpMethod::Get => format_ident!("Get"),
                 };
-                let route_path = match http_opt.path {
-                    Some(litstr) => litstr,
+                let (route_path, route_path_str) = match http_opt.path {
+                    Some(litstr) => (litstr.clone(), litstr.value()),
                     None => {
                         let default_route = format!("/activate/{}", method.sig.ident);
-                        parse_quote_spanned! { sig_span => #default_route }
+                        (
+                            parse_quote_spanned! { sig_span => #default_route },
+                            default_route,
+                        )
                     }
+                };
+
+                let mut http_doc = crate::html::Call {
+                    path: route_path_str,
+                    http_method: http_opt.method,
+                    docs: method_docs,
+                    params: http_doc_params,
+                    return_type: None,
                 };
 
                 let route_pat = quote_spanned! { sig_span => ( carol_guest::http::Method::#route_method_ident, #route_path ) };
@@ -270,11 +297,14 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     format!("#[activate] bincode encoding input to {}", method_name);
 
                 let handle_output = match method.sig.output.clone() {
-                    ReturnType::Default => quote_spanned! { method.sig.span() => http::Response {
-                        headers: vec![],
-                        status: 204,
-                        body: vec![]
-                    }},
+                    ReturnType::Default => {
+                        http_doc.return_type = None;
+                        quote_spanned! { method.sig.span() => http::Response {
+                            headers: vec![],
+                            status: 204,
+                            body: vec![]
+                        }}
+                    }
                     ReturnType::Type(_, ty) => {
                         let bincode_decode_output_expect = format!(
                             "#[activate] bincode decoding the output of {} to type {}",
@@ -286,6 +316,8 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                             method_name,
                             ty.to_token_stream()
                         );
+                        http_doc.return_type = Some(ty.to_token_stream().to_string());
+
                         quote_spanned! { ty.span() =>  {
                             let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
                             let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
@@ -323,7 +355,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
 
                 }};
 
-                json_match_arms.push(Arm {
+                http_match_arms.push(Arm {
                     attrs: vec![],
                     pat: syn::Pat::Verbatim(route_pat),
                     fat_arrow_token: Token![=>](sig_span),
@@ -331,6 +363,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     comma: None,
                     guard: None,
                 });
+                html_doc_list.add_call(http_doc);
             }
             call_interface_enum.variants.push(variant);
         }
@@ -344,8 +377,29 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         arms: match_arms,
     });
 
-    json_match_arms.push(parse_quote! { _ => {
-        return http::Response {
+    {
+        let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or("<unknown>".to_string());
+        let crate_version = std::env::var("CARGO_PKG_VERSION").unwrap_or("<unknown>".to_string());
+        let welcome_html_string = crate::html::default_welcome(
+            &crate_name,
+            &crate_version,
+            machine_description.as_deref(),
+            &html_doc_list.render(),
+        )
+        .into_bytes();
+        let welcome_literal = proc_macro2::Literal::byte_string(&welcome_html_string);
+
+        http_match_arms.push(parse_quote! { (carol_guest::http::Method::Get, "/") => {
+            http::Response {
+                headers: vec![],
+                body: #welcome_literal.to_vec(),
+                status: 200,
+            }
+        }});
+    }
+
+    http_match_arms.push(parse_quote! { _ => {
+        http::Response {
             headers: vec![],
             body: vec![],
             status: 404
@@ -357,7 +411,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         match_token: Token![match](Span::call_site()),
         expr: Box::new(Expr::Verbatim(quote! { (request.method, path) })),
         brace_token: token::Brace::default(),
-        arms: json_match_arms,
+        arms: http_match_arms,
     });
 
     let self_ty = input.self_ty.clone();
@@ -426,4 +480,27 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     };
 
     output
+}
+
+fn extract_docs(attrs: &[Attribute]) -> syn::parse::Result<Option<String>> {
+    struct Doc(String);
+
+    impl syn::parse::Parse for Doc {
+        fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+            input.parse::<Token![=]>()?;
+            let lit = input.parse::<syn::LitStr>()?;
+            Ok(Self(lit.value()))
+        }
+    }
+    let doc_lines = attrs
+        .iter()
+        .filter(|attr| attr.path.to_token_stream().to_string() == "doc")
+        .cloned()
+        .map(|doc| parse2::<Doc>(doc.tokens).map(|v| v.0))
+        .collect::<Result<Vec<String>, _>>()?;
+    if doc_lines.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(doc_lines.join("\n")))
+    }
 }

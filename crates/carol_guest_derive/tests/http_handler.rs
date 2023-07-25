@@ -10,8 +10,10 @@ pub struct Foo;
 pub struct NoSerde;
 
 #[machine]
+/// This is a **foo**
 impl Foo {
     #[activate(http(POST))]
+    /// A post request to add two numbers together
     pub fn post_add(&self, _cap: &impl Any, lhs: u32, rhs: u32) -> u32 {
         lhs + rhs
     }
@@ -130,4 +132,19 @@ fn method_wihout_http_should_404() {
     });
 
     assert_eq!(response.status, 404);
+}
+
+#[test]
+fn root_handler() {
+    let response = Foo::handle_http(http::Request {
+        method: http::Method::Get,
+        uri: "/".into(),
+        body: vec![],
+        headers: vec![],
+    });
+
+    assert_eq!(response.status, 200);
+
+    let body = String::from_utf8(response.body).unwrap();
+    assert!(body.contains("This is a <strong>foo</strong>"));
 }

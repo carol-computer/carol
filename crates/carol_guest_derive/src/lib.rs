@@ -2,6 +2,7 @@ mod activate;
 mod codec;
 mod machine;
 use proc_macro2::TokenStream;
+mod html;
 
 #[proc_macro_attribute]
 pub fn machine(

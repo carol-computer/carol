@@ -23,9 +23,19 @@ pub struct Http {
     pub path: Option<syn::LitStr>,
 }
 
+#[derive(PartialOrd, Ord, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HttpMethod {
     Post,
     Get,
+}
+
+impl core::fmt::Display for HttpMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HttpMethod::Post => write!(f, "POST"),
+            HttpMethod::Get => write!(f, "GET"),
+        }
+    }
 }
 
 impl Parse for Opts {
