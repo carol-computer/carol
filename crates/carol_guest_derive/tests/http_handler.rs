@@ -113,7 +113,7 @@ fn get_request_invalid_params() {
 fn method_not_allowed() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Post,
-        uri: "/activate/post_get".into(),
+        uri: "/activate/get_add".into(),
         body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
         headers: vec![],
     });

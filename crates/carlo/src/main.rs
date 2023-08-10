@@ -197,7 +197,12 @@ impl BuildOpts {
             "Couldn't read compiled WASM file {final_wasm_artifact}"
         ))?;
 
-        let encoder = ComponentEncoder::default().validate(true).module(&wasm)?;
+        let encoder = ComponentEncoder::default()
+            .validate(true)
+            .module(&wasm)
+            .context(format!(
+                "validating wasm while transforming {final_wasm_artifact} into a component"
+            ))?;
 
         let bytes = encoder
             .encode()

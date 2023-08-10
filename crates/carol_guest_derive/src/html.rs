@@ -1,7 +1,4 @@
 use maud::{html, PreEscaped};
-use std::collections::BTreeMap;
-
-use crate::activate::HttpMethod;
 
 pub fn default_welcome(name: &str, version: &str, desc: Option<&str>, body: &str) -> String {
     let desc = desc.unwrap_or("");
@@ -15,53 +12,4 @@ pub fn default_welcome(name: &str, version: &str, desc: Option<&str>, body: &str
         (PreEscaped(body))
     }
     .into_string()
-}
-
-#[derive(Debug, Default)]
-pub struct HttpCallList(BTreeMap<String, BTreeMap<HttpMethod, Endpoint>>);
-
-#[derive(Debug, Default)]
-struct Endpoint {
-    docs: Option<String>,
-    params: Vec<(String, String)>,
-}
-
-pub struct Call {
-    pub path: String,
-    pub http_method: HttpMethod,
-    pub docs: Option<String>,
-    pub params: Vec<(String, String)>,
-    pub return_type: Option<String>,
-}
-
-impl HttpCallList {
-    pub fn add_call(&mut self, call: Call) {
-        let methods = self.0.entry(call.path).or_default();
-        methods.insert(
-            call.http_method,
-            Endpoint {
-                docs: call.docs,
-                params: call.params,
-            },
-        );
-    }
-
-    pub fn render(&self) -> String {
-        html! {
-            @for (path, calls) in &self.0 {
-                @for (method, endpoint) in calls {
-                    @let desc_html = comrak::markdown_to_html(endpoint.docs.as_deref().unwrap_or(""), &comrak::ComrakOptions::default());
-                    h2 { (method) " " (path) }
-                    p { (PreEscaped(desc_html)) }
-                    h3 { "Paramters" }
-                    ol {
-                        @for (name, ty) in &endpoint.params {
-                            li { (name) ": " code { (ty) } }
-                        }
-                    }
-                }
-
-            }
-        }.into_string()
-    }
 }

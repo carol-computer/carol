@@ -1,14 +1,13 @@
-use crate::activate::HttpMethod;
 use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    parse2, parse_quote, parse_quote_spanned,
+    parse2, parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
     token::{self, Brace},
     Arm, Attribute, Expr, ExprMatch, ExprMethodCall, ExprPath, Field, FieldPat, Fields,
-    FieldsNamed, FieldsUnnamed, Generics, ImplItem, ItemEnum, ItemStruct, Pat, PatStruct, PatTuple,
-    PatTupleStruct, Path, PathSegment, ReturnType, Token, Type, TypePath, Variant, VisPublic,
+    FieldsNamed, FieldsUnnamed, Generics, ImplItem, ItemEnum, ItemStruct, LitStr, Pat, PatStruct,
+    PatTuple, PatTupleStruct, Path, PathSegment, Token, Type, TypePath, Variant, VisPublic,
     Visibility,
 };
 
@@ -37,9 +36,8 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     };
 
     let mut match_arms: Vec<Arm> = vec![];
-    let mut http_match_arms: Vec<Arm> = vec![];
     let mut method_structs = vec![];
-    let mut html_doc_list = crate::html::HttpCallList::default();
+    let mut call_list = crate::call_list::HttpCallList::new();
 
     for item in &mut input.items {
         if let ImplItem::Method(method) = item {
@@ -254,120 +252,23 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             });
 
             if let Some(http_opt) = activate_opts.http {
-                let route_method_ident = match http_opt.method {
-                    HttpMethod::Post => format_ident!("Post"),
-                    HttpMethod::Get => format_ident!("Get"),
-                };
-                let (route_path, route_path_str) = match http_opt.path {
-                    Some(litstr) => (litstr.clone(), litstr.value()),
-                    None => {
-                        let default_route = format!("/activate/{}", method.sig.ident);
-                        (
-                            parse_quote_spanned! { sig_span => #default_route },
-                            default_route,
-                        )
-                    }
+                let route_path = match &http_opt.path {
+                    Some(litstr) => litstr.clone(),
+                    None => LitStr::new(&format!("/activate/{}", method.sig.ident), sig_span),
                 };
 
-                let mut http_doc = crate::html::Call {
-                    path: route_path_str,
-                    http_method: http_opt.method,
+                call_list.add_call(crate::call_list::Call {
+                    path: route_path,
+                    http_opt,
+                    sig: method.sig.clone(),
                     docs: method_docs,
-                    params: http_doc_params,
-                    return_type: None,
-                };
-
-                let route_pat = quote_spanned! { sig_span => ( carol_guest::http::Method::#route_method_ident, #route_path ) };
-                let struct_path: Path = parse_quote!(#carol_mod::#struct_path);
-
-                let decode_code = match http_opt.method {
-                    HttpMethod::Post => {
-                        quote_spanned! { sig_span => {
-                            carol_guest::serde_json::from_slice::<#struct_path>(body).map_err(|e| format!("{:?}", e))
-                        }}
-                    }
-                    HttpMethod::Get => {
-                        quote_spanned! { sig_span => {
-                            carol_guest::serde_urlencoded::from_str::<#struct_path>(query).map_err(|e| e.to_string())
-                        }}
-                    }
-                };
-
-                let bincode_encode_error =
-                    format!("#[activate] bincode encoding input to {}", method_name);
-
-                let handle_output = match method.sig.output.clone() {
-                    ReturnType::Default => {
-                        http_doc.return_type = None;
-                        quote_spanned! { method.sig.span() => http::Response {
-                            headers: vec![],
-                            status: 204,
-                            body: vec![]
-                        }}
-                    }
-                    ReturnType::Type(_, ty) => {
-                        let bincode_decode_output_expect = format!(
-                            "#[activate] bincode decoding the output of {} to type {}",
-                            method_name,
-                            ty.to_token_stream()
-                        );
-                        let json_encode_output_expect = format!(
-                            "#[activate] JSON encoding the output of {} from type {}",
-                            method_name,
-                            ty.to_token_stream()
-                        );
-                        http_doc.return_type = Some(ty.to_token_stream().to_string());
-
-                        quote_spanned! { ty.span() =>  {
-                            let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
-                            let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
-                            http::Response {
-                                headers: vec![],
-                                status: 200,
-                                body: json_encoded_output
-                            }
-                        }}
-                    }
-                };
-
-                let arm_body = parse_quote_spanned! { sig_span => {
-                    let method_struct = #decode_code;
-                    let method_struct = match method_struct {
-                        Ok(method_struct) => method_struct,
-                        Err(e) => return http::Response {
-                            headers: vec![],
-                            body: e.as_bytes().to_vec(),
-                            status: 400,
-                        }
-                    };
-                    let method_variant = #variant_path(method_struct);
-                    let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
-                    let output = match carol_guest::machines::Cap::self_activate(&__ctx, &binary_input) {
-                        Ok(output) => output,
-                        Err(e) => return http::Response {
-                            headers: vec![],
-                            body: format!("HTTP handler failed to self-activate via {}, {}: {}", stringify!(#route_method_ident), #route_path, e).as_bytes().to_vec(),
-                            status: 500,
-                        }
-                    };
-
-                    #handle_output
-
-                }};
-
-                http_match_arms.push(Arm {
-                    attrs: vec![],
-                    pat: syn::Pat::Verbatim(route_pat),
-                    fat_arrow_token: Token![=>](sig_span),
-                    body: arm_body,
-                    comma: None,
-                    guard: None,
                 });
-                html_doc_list.add_call(http_doc);
             }
             call_interface_enum.variants.push(variant);
         }
     }
+
+    let mut http_match_arms = call_list.to_match_arms(&carol_mod, &enum_name);
 
     let match_stmt = Expr::Match(ExprMatch {
         attrs: vec![],
@@ -384,16 +285,23 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             &crate_name,
             &crate_version,
             machine_description.as_deref(),
-            &html_doc_list.render(),
+            &call_list.render(),
         )
         .into_bytes();
         let welcome_literal = proc_macro2::Literal::byte_string(&welcome_html_string);
 
-        http_match_arms.push(parse_quote! { (carol_guest::http::Method::Get, "/") => {
-            http::Response {
-                headers: vec![],
-                body: #welcome_literal.to_vec(),
-                status: 200,
+        http_match_arms.push(parse_quote! { "/" => {
+            match __method {
+                carol_guest::http::Method::Get => http::Response {
+                    headers: vec![],
+                    body: #welcome_literal.to_vec(),
+                    status: 200,
+                },
+                _ => http::Response {
+                    headers: vec![("Allow".to_string(), "GET".as_bytes().to_vec())],
+                    body: #welcome_literal.to_vec(),
+                    status: 405,
+                }
             }
         }});
     }
@@ -406,10 +314,10 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         }
     }});
 
-    let json_match_stmt = Expr::Match(ExprMatch {
+    let http_match_stmt = Expr::Match(ExprMatch {
         attrs: vec![],
         match_token: Token![match](Span::call_site()),
-        expr: Box::new(Expr::Verbatim(quote! { (request.method, path) })),
+        expr: Box::new(Expr::Verbatim(quote! { __path })),
         brace_token: token::Brace::default(),
         arms: http_match_arms,
     });
@@ -468,11 +376,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                     let __ctx = carol_guest::HttpHandlerCap;
 
                     let uri = request.uri();
-                    let mut path = uri.path();
-                    let query = uri.query().unwrap_or("");
+                    let mut __path = uri.path();
+                    let __query = uri.query().unwrap_or("");
+                    let __method = request.method;
                     let body = &request.body;
 
-                    #json_match_stmt
+                    #http_match_stmt
                 }
             }
         }
