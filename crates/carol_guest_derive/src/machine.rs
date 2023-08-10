@@ -108,7 +108,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                             let mut attrs = vec![];
                             http_doc_params.push((
                                 pat_ident.ident.to_string(),
-                                fn_arg.ty.to_token_stream().to_string().replace(" ", ""),
+                                fn_arg.ty.to_token_stream().to_string().replace(' ', ""),
                             ));
                             for attr in fn_arg.attrs.drain(..) {
                                 if attr.path.get_ident().map(|ident| ident.to_string())
