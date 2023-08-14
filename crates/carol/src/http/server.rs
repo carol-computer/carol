@@ -11,32 +11,8 @@ use hyper::{header, Uri};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::str::FromStr;
+use std::sync::Arc;
 use tracing::{event, span, Instrument, Level};
-
-async fn handle(req: Request<Body>, state: State) -> Result<Response<Body>, Infallible> {
-    let span = span!(
-        Level::INFO,
-        "HTTP",
-        method = req.method().as_str(),
-        uri = req.uri().to_string()
-    );
-    match dispatch(req, state).instrument(span.clone()).await {
-        Ok(res) => Ok(res),
-        Err(problem) => {
-            let _enter = span.enter();
-            event!(
-                Level::DEBUG,
-                error = problem.host_error.to_string(),
-                "HTTP response failed"
-            );
-            let status = problem.status;
-            let body = problem.into_json_body();
-            let mut response = Response::new(Body::from(body));
-            *response.status_mut() = status;
-            Ok(response)
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Problem {
@@ -359,16 +335,100 @@ async fn slurp_request_body(req: &mut Request<Body>) -> Result<Vec<u8>, Problem>
     Ok(buf)
 }
 
-pub async fn start(config: config::HttpServerConfig, state: State) -> Result<(), hyper::Error> {
+#[derive(Clone)]
+pub struct Handler {
+    state: State,
+    resource_map: Arc<HashMap<String, Vec<u8>>>,
+}
+
+impl Handler {
+    async fn handle(self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+        if let Some(resource_path) = req.uri().path().strip_prefix("/resources/") {
+            return self.handle_resource_request(resource_path).await;
+        }
+        self._handle(req).await
+    }
+    async fn handle_resource_request(self, path: &str) -> Result<Response<Body>, Infallible> {
+        let span = span!(Level::DEBUG, "resource handler", resource = path);
+        let _enter = span.enter();
+        match self.resource_map.get(path) {
+            Some(resource) => {
+                event!(Level::DEBUG, "resource found");
+                let mut res = Response::builder().status(200);
+                if path.ends_with(".css") {
+                    res = res.header("Content-Type", "text/css");
+                }
+                Ok(res.body(Body::from(resource.clone())).expect("infallible"))
+            }
+            None => {
+                event!(Level::INFO, "resource not found");
+                Ok(Response::builder()
+                    .status(404)
+                    .body(Body::empty())
+                    .expect("infallible"))
+            }
+        }
+    }
+    async fn _handle(self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+        let span = span!(
+            Level::INFO,
+            "HTTP",
+            method = req.method().as_str(),
+            uri = req.uri().to_string()
+        );
+        match dispatch(req, self.state).instrument(span.clone()).await {
+            Ok(res) => Ok(res),
+            Err(problem) => {
+                let _enter = span.enter();
+                event!(
+                    Level::DEBUG,
+                    error = problem.host_error.to_string(),
+                    "HTTP response failed"
+                );
+                let status = problem.status;
+                let body = problem.into_json_body();
+                let mut response = Response::new(Body::from(body));
+                *response.status_mut() = status;
+                Ok(response)
+            }
+        }
+    }
+}
+
+pub async fn start(config: config::HttpServerConfig, state: State) -> anyhow::Result<()> {
+    let mut resource_map: HashMap<String, Vec<u8>> = config
+        .resources
+        .into_iter()
+        .map(|(uri_path, file_path)| {
+            Ok((
+                uri_path,
+                std::fs::read(&file_path)
+                    .context(format!("trying to read {}", file_path.display()))?,
+            ))
+        })
+        .collect::<anyhow::Result<_>>()?;
+
+    resource_map
+        .entry("guest-default.css".into())
+        .or_insert_with(|| {
+            event!(Level::INFO, "using guest-default.css from carol build");
+            include_bytes!("../../resources/guest-default.css").to_vec()
+        });
+    let resource_map = Arc::new(resource_map);
+    let handler = Handler {
+        state,
+        resource_map,
+    };
+
     // And a MakeService to handle each connection...
     let make_service = make_service_fn(move |_conn| {
-        let state = state.clone();
-        let service = move |req| handle(req, state.clone());
+        let handler = handler.clone();
+        let service = move |req| handler.clone().handle(req);
         async move { Ok::<_, Infallible>(service_fn(service)) }
     });
 
     event!(Level::INFO, "Binding http server to {}", config.listen);
 
     // Then bind and serve...
-    Server::bind(&config.listen).serve(make_service).await
+    Ok(Server::bind(&config.listen).serve(make_service).await?)
 }

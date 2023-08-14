@@ -14,6 +14,7 @@ serde_json = { workspace = true }
 http_crate = { workspace = true }
 serde = { workspace = true }
 carol_core = { workspace = true }
+serde_urlencoded = { version = "0.7.1" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { workspace = true, features = [ "blocking" ] }

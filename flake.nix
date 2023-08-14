@@ -48,6 +48,7 @@
           src = pkgs.lib.cleanSourceWith {
             src = craneLib.path ./.;
             filter = path: type:
+              (pkgs.lib.hasInfix "/resources/" path) ||
               (pkgs.lib.hasSuffix "\.wit" path) ||
               (craneLib.filterCargoSources path type);
           };
@@ -56,7 +57,7 @@
           # out from the packages we want to output in the flake packages
           readTomlFile = path: builtins.fromTOML (builtins.readFile path);
           workspaceMembers = (readTomlFile ./Cargo.toml).workspace.members;
-          isExample = p: (builtins.substring 0 15 p) == "example-crates/";
+          isExample = p: (builtins.substring 0 15 p) == "example-guests/";
           exportedMembers = builtins.filter (x: !isExample x) workspaceMembers;
           exampleMembers = builtins.filter isExample workspaceMembers;
 

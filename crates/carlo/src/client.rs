@@ -24,7 +24,7 @@ impl Client {
             .post("binaries") // TODO idempotent HTTP PUT?
             .body(binary)
             .send()
-            .context("Uploading compiled WASM file to {carol_url}")?;
+            .context("Uploading compiled WASM")?;
 
         let api_response: BinaryCreated = self
             .decode_response(http_response)
@@ -45,7 +45,7 @@ impl Client {
         let http_response = self
             .post(&format!("binaries/{binary_id}"))
             .send()
-            .context("Creating machine from {binary_id} on {carol_url}")?;
+            .context(format!("Creating machine from {binary_id}"))?;
 
         self.decode_response::<MachineCreated>(http_response)
             .context("Parse response")

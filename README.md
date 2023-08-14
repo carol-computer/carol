@@ -43,7 +43,7 @@ cargo run -p carol -- --cfg carol.yml run &
 
 ### Uploading a program
 
-First compile it to wasm. Here we just compile one of the examples in `example-crates`.
+First compile it to wasm. Here we just compile one of the examples in `example-guests`.
 
 ``` sh
 wasm_output=$( cargo run -p carlo -- build -p bitmex_guest )
@@ -74,7 +74,7 @@ just blindly trusted the carol server.
 
 ### Activate the machine
 
-The machine we've created has a few ways of activating it as defined [the code](./example-crates/bitmex/guest/src/lib.rs ) we compiled to the binary.
+The machine we've created has a few ways of activating it as defined [the code](./example-guests/bitmex/src/lib.rs ) we compiled to the binary.
 At the time of writing it's:
 
 - `attest_to_price_at_minute`
