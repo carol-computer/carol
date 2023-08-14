@@ -2,6 +2,7 @@
 name = "bitmex_guest"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/carol-computer/carol"
 
 [features]
 network_tests = []

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Config {
@@ -20,12 +20,15 @@ impl Config {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct HttpServerConfig {
     pub listen: std::net::SocketAddr,
+    #[serde(default)]
+    pub resources: HashMap<String, PathBuf>,
 }
 
 impl Default for HttpServerConfig {
     fn default() -> Self {
         Self {
             listen: std::net::SocketAddr::from_str("127.0.0.1:8000").unwrap(),
+            resources: Default::default(),
         }
     }
 }

@@ -1028,7 +1028,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello_world"
+name = "hello_world_guest"
 version = "0.1.0"
 dependencies = [
  "carol_guest",

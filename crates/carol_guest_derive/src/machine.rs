@@ -279,15 +279,9 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     });
 
     {
-        let crate_name = std::env::var("CARGO_PKG_NAME").unwrap_or("<unknown>".to_string());
-        let crate_version = std::env::var("CARGO_PKG_VERSION").unwrap_or("<unknown>".to_string());
-        let welcome_html_string = crate::html::default_welcome(
-            &crate_name,
-            &crate_version,
-            machine_description.as_deref(),
-            &call_list.render(),
-        )
-        .into_bytes();
+        let welcome_html_string =
+            crate::html::default_welcome(machine_description.as_deref(), &call_list.render())
+                .into_bytes();
         let welcome_literal = proc_macro2::Literal::byte_string(&welcome_html_string);
 
         http_match_arms.push(parse_quote! { "/" => {
