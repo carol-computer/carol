@@ -9,10 +9,12 @@ use wasmtime::component::bindgen;
 
 bindgen!({
     world: "machine",
-    path: "../../wit/v0.1.0",
+    path: "../../wit/",
     tracing: true,
     async: true,
 });
+
+pub use exports::carol::machine::guest;
 
 pub struct Host {
     pub machine_id: MachineId,
@@ -20,6 +22,7 @@ pub struct Host {
     pub env: Environment,
     pub panic_message: Option<String>,
 }
+
 pub enum Environment {
     Activation {
         bls_keypair: bls::KeyPair,
@@ -109,6 +112,7 @@ impl log::Host for Host {
 impl machines::Host for Host {
     async fn self_activate(
         &mut self,
+        method_name: String,
         input: Vec<u8>,
     ) -> anyhow::Result<Result<Vec<u8>, machines::Error>> {
         let (binary_id, params) = self
@@ -126,6 +130,7 @@ impl machines::Host for Host {
                 self.state.clone(),
                 compiled_binary.as_ref(),
                 params.as_ref(),
+                &method_name,
                 &input,
             )
             .await

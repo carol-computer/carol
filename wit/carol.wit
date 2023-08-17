@@ -14,23 +14,23 @@ interface http {
       unexpected(string)
    }
     enum method {
-       get,
-       post,
-       put,
-       patch,
-       delete
+      get,
+      post,
+      put,
+      patch,
+      delete
     }
     record request {
-         method: method,
-         uri: string,
-         headers: list<tuple<string,list<u8>>>,
-         body: list<u8>,
+      method: method,
+      uri: string,
+      headers: list<tuple<string,list<u8>>>,
+      body: list<u8>,
     }
 
     record response {
-        headers: list<tuple<string,list<u8>>>,
-        body: list<u8>,
-        status: u16
+      headers: list<tuple<string,list<u8>>>,
+      body: list<u8>,
+      status: u16
     }
     execute: func(request: request) -> result<response,error>
 }
@@ -55,7 +55,25 @@ interface machines {
     variant error {
         panic(panic-info)
     }
-    self-activate: func(input: list<u8>) -> result<list<u8>, error>
+    self-activate: func(method: string, input: list<u8>) -> result<list<u8>, error>
+}
+
+
+// The guest machine API the host has access to
+interface guest {
+  use http.{request as http-request,response as http-response}
+
+  record binary-api {
+    activations: list<activation-description>,
+  }
+
+  record activation-description {
+    name: string,
+  }
+
+  get-binary-api: func() -> binary-api
+  activate: func(machine-params: list<u8>, activation: string, input: list<u8>) -> list<u8>
+  handle-http: func(request: http-request) -> http-response
 }
 
 world machine {
@@ -64,10 +82,5 @@ world machine {
     import log
     import machines
 
-    export machine: interface {
-        activate: func(machine-params: list<u8>, input: list<u8>) -> list<u8>
-
-        use http.{request as http-request,response as http-response}
-        handle-http: func(request: http-request) -> http-response
-    }
+    export guest
 }

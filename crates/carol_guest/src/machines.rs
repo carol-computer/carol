@@ -2,7 +2,7 @@ use crate::bind::carol::machine::machines;
 use carol_core::MachineId;
 
 pub trait Cap {
-    fn self_activate(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    fn self_activate(&self, method: &str, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 #[derive(

@@ -5,8 +5,8 @@ pub use bind::__link_section;
 use bind::carol::machine;
 
 impl machines::Cap for ActivateCap {
-    fn self_activate(&self, input: &[u8]) -> Result<Vec<u8>, machines::Error> {
-        Ok(machine::machines::self_activate(input)?)
+    fn self_activate(&self, method: &str, input: &[u8]) -> Result<Vec<u8>, machines::Error> {
+        Ok(machine::machines::self_activate(method, input)?)
     }
 }
 
@@ -48,7 +48,7 @@ impl log::Cap for HttpHandlerCap {
 }
 
 impl machines::Cap for HttpHandlerCap {
-    fn self_activate(&self, input: &[u8]) -> Result<Vec<u8>, machines::Error> {
-        Ok(machine::machines::self_activate(input)?)
+    fn self_activate(&self, method_name: &str, input: &[u8]) -> Result<Vec<u8>, machines::Error> {
+        Ok(machine::machines::self_activate(method_name, input)?)
     }
 }

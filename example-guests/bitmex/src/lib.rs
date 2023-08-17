@@ -137,6 +137,8 @@ impl BitMexAttest {
 
 #[cfg(test)]
 mod test {
+    use time::OffsetDateTime;
+
     #[cfg(feature = "network_tests")]
     #[test]
     fn index_price_at_minute() {
@@ -149,4 +151,5 @@ mod test {
             .unwrap();
         assert_eq!(index_price.price, 30492);
     }
+
 }

@@ -25,7 +25,7 @@ impl log::Cap for ActivateCap {
 }
 
 impl machines::Cap for ActivateCap {
-    fn self_activate(&self, _input: &[u8]) -> Result<Vec<u8>, machines::Error> {
+    fn self_activate(&self, _method_name: &str, _input: &[u8]) -> Result<Vec<u8>, machines::Error> {
         panic!("cannot call activate outside of WASM guest environment")
     }
 }
@@ -102,7 +102,7 @@ impl log::Cap for TestCap {
 pub struct HttpHandlerCap;
 
 impl machines::Cap for HttpHandlerCap {
-    fn self_activate(&self, _input: &[u8]) -> Result<Vec<u8>, machines::Error> {
+    fn self_activate(&self, _method_name: &str, _input: &[u8]) -> Result<Vec<u8>, machines::Error> {
         todo!("we can't do activations outside of carol guest environments yet")
     }
 }

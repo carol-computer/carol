@@ -3,6 +3,7 @@ name = "bitmex_guest"
 version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/carol-computer/carol"
+homepage = "https://github.com/carol-computer/carol/example-crates/bitmex"
 
 [features]
 network_tests = []

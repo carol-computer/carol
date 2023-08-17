@@ -1,5 +1,5 @@
 #![allow(renamed_and_removed_lints, unknown_lints, disallowed_names)]
-use carol_guest::bind::exports::machine::Machine;
+use carol_guest::bind::exports::carol::machine::guest::Guest;
 use carol_guest_derive::{activate, codec, machine};
 use core::any::Any;
 
@@ -23,16 +23,17 @@ impl Foo {
     }
 }
 
-use carol_activate::{Activate, Add, CheckedSub};
+use carol_activate::{Add, CheckedSub};
 
 #[test]
 fn call_add() {
-    let method = Activate::Add(Add { lhs: 7, rhs: 3 });
-    let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
+    let input =
+        bincode::encode_to_vec(Add { lhs: 7, rhs: 3 }, bincode::config::standard()).unwrap();
     let foo = Foo;
     let output = Foo::activate(
         bincode::encode_to_vec(foo, bincode::config::standard()).unwrap(),
-        call,
+        "add".into(),
+        input,
     );
     let (result, _): (u32, _) =
         bincode::decode_from_slice(&output, bincode::config::standard()).unwrap();
@@ -41,24 +42,15 @@ fn call_add() {
 
 #[test]
 fn call_sub() {
-    let method = Activate::CheckedSub(CheckedSub { lhs: 7, rhs: 3 });
-    let call = bincode::encode_to_vec(method, bincode::config::standard()).unwrap();
+    let input =
+        bincode::encode_to_vec(CheckedSub { lhs: 7, rhs: 3 }, bincode::config::standard()).unwrap();
     let foo = Foo;
     let output = Foo::activate(
         bincode::encode_to_vec(foo, bincode::config::standard()).unwrap(),
-        call,
+        "checked_sub".into(),
+        input,
     );
     let (result, _): (Option<u32>, _) =
         bincode::decode_from_slice(&output, bincode::config::standard()).unwrap();
     assert_eq!(result, Some(4));
-}
-
-#[test]
-fn only_activate_attribute_makes_activation_possible() {
-    let method = Activate::Add(Add { lhs: 7, rhs: 3 });
-    // exhaustively match
-    match method {
-        Activate::Add(_) => {}
-        Activate::CheckedSub(_) => {}
-    }
 }

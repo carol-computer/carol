@@ -17,3 +17,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 wit-component.workspace = true
+tokio = { version = "1", features = ["rt"] }

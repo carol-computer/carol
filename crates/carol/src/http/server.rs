@@ -56,8 +56,8 @@ impl Problem {
         }
     }
 
-    pub fn bad_request(client_desc: String, host_error: anyhow::Error) -> Self {
-        Self::new(client_desc, host_error, StatusCode::BAD_REQUEST)
+    pub fn bad_request(client_desc: impl Into<String>, host_error: anyhow::Error) -> Self {
+        Self::new(client_desc.into(), host_error, StatusCode::BAD_REQUEST)
     }
 
     pub fn internal_server_error(host_error: anyhow::Error) -> Self {
@@ -181,14 +181,18 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
         (method, ["binaries", binary_id]) => {
             let binary_id = BinaryId::from_str(binary_id)
                 .map_err(|e| Problem::invalid_path_element::<BinaryId>(e.into(), binary_id))?;
-            let _binary = state
+            let binary = state
                 .get_binary(binary_id)
                 .ok_or(Problem::not_found(path))?;
 
             match method {
                 &Method::GET => {
-                    let mut response = Response::new(Body::empty());
-                    *response.status_mut() = StatusCode::NO_CONTENT;
+                    let carol_host::guest::BinaryApi {
+                        activations
+                    } = state.executor().get_binary_api(&binary).await.map_err(|e| Problem::bad_request("failed to retrieve API from binary", e))?;
+                    let response =  build_response(&carol_http::api::BinaryDescription {
+                        activations: activations.into_iter().map(|carol_host::guest::ActivationDescription { name }| (name, carol_http::api::AcivationDescription {})).collect()
+                    });
                     Ok(response)
                 }
                 &Method::POST => {
@@ -214,7 +218,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 )),
             }
         }
-        (method, ["machines", machine_id]) => {
+        (method, ["machines", machine_id, trailing @ ..]) => {
             let machine_id = MachineId::from_str(machine_id)
                 .map_err(|e| Problem::invalid_path_element::<MachineId>(e.into(), machine_id))?;
             let (binary_id, params, compiled_binary) = {
@@ -227,90 +231,94 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 (binary_id, params, compiled_binary)
             };
 
-            match method {
-                &Method::GET => Ok(build_response(&GetMachine {
-                    binary_id,
-                    params: params.as_ref(),
-                })),
-                &Method::POST => {
-                    let activation_input = slurp_request_body(&mut req).await?;
+            match trailing {
+                &[] => {
+                    match method {
+                        &Method::GET => Ok(build_response(&GetMachine {
+                            binary_id,
+                            params: params.as_ref(),
+                        })),
+                        _ => Err(Problem::method_not_allowed(
+                            path,
+                            method.as_str(),
+                            &["GET"],
+                        ))
+                    }
+                },
+                ["http", inner_path @ ..] => {
+                    let transformed_uri = {
+                        let mut parts = req.uri().clone().into_parts();
+                        let mut new_paq = format!("/{}", inner_path.join("/"));
+                        if let Some(paq) = parts.path_and_query {
+                            if let Some(query) = paq.query() {
+                                new_paq.extend(["?", query]);
+                            }
+                        }
+                        let new_paq = PathAndQuery::from_str(&new_paq)
+                            .with_context(|| format!("trying to turn {new_paq} into a path and query"))
+                            .map_err(Problem::internal_server_error)?;
+                        parts.path_and_query = Some(new_paq);
+                        Uri::from_parts(parts)
+                            .context("trying to transform request URI for machine to handle")
+                            .map_err(Problem::internal_server_error)?
+                    };
+                    *req.uri_mut() = transformed_uri;
                     let output = state
                         .executor()
-                        .activate_machine(
+                        .machine_handle_http_request(
                             state.clone(),
                             compiled_binary.as_ref(),
                             params.as_ref(),
-                            &activation_input,
+                            req,
                         )
                         .await
-                        .map_err(|e| {
-                            Problem::new(
-                                format!("error occurred while trying to activate machine: {}", e),
-                                e,
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                            )
-                        })?
-                        .map_err(|e| {
-                            Problem::new(
-                                format!("machine failed to complete activation: {}", e),
-                                e.into(),
-                                StatusCode::BAD_REQUEST,
-                            )
-                        })?;
-                    Ok(Response::new(Body::from(output)))
-                }
-                method => Err(Problem::method_not_allowed(
-                    path,
-                    method.as_str(),
-                    &["POST", "GET"],
-                )),
+                        .map_err(Problem::internal_server_error)?
+                        .map_err(Problem::guest_error)?;
+
+                    Ok(output)
+                },
+                ["activate", activation_name] => {
+                    let activation_name = activation_name.to_string();
+                    match method {
+                        &Method::POST => {
+                            let activation_input = slurp_request_body(&mut req).await?;
+                            let output = state
+                                .executor()
+                                .activate_machine(
+                                    state.clone(),
+                                    compiled_binary.as_ref(),
+                                    params.as_ref(),
+                                    &activation_name,
+                                    &activation_input,
+                                )
+                                .await
+                                .map_err(|e| {
+                                    Problem::new(
+                                        format!("error occurred while trying to activate machine: {}", e),
+                                        e,
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                    )
+                                })?
+                                .map_err(|e| {
+                                    Problem::new(
+                                        format!("machine failed to complete activation: {}", e),
+                                        e.into(),
+                                        StatusCode::BAD_REQUEST,
+                                    )
+                                })?;
+                            Ok(Response::new(Body::from(output)))
+                        }
+                        method => Err(Problem::method_not_allowed(
+                            path,
+                            method.as_str(),
+                            &["POST"],
+                        )),
+                    }
+                },
+                _ => Err(Problem::not_found(path)),
             }
         }
         (method, ["machines"]) => Err(Problem::method_not_allowed(path, method.as_str(), &[])),
-        (_, ["machines", machine_id, inner_path @ ..]) => {
-            let machine_id = MachineId::from_str(machine_id)
-                .map_err(|e| Problem::invalid_path_element::<MachineId>(e.into(), machine_id))?;
-            let (params, compiled_binary) = {
-                let (binary_id, params) = state
-                    .get_machine(machine_id)
-                    .ok_or(Problem::not_found(path))?;
-                let compiled_binary = state
-                    .get_binary(binary_id)
-                    .ok_or(Problem::not_found(path))?;
-                (params, compiled_binary)
-            };
-
-            let transformed_uri = {
-                let mut parts = req.uri().clone().into_parts();
-                let mut new_paq = format!("/{}", inner_path.join("/"));
-                if let Some(paq) = parts.path_and_query {
-                    if let Some(query) = paq.query() {
-                        new_paq.extend(["?", query]);
-                    }
-                }
-                let new_paq = PathAndQuery::from_str(&new_paq)
-                    .with_context(|| format!("trying to turn {new_paq} into a path and query"))
-                    .map_err(Problem::internal_server_error)?;
-                parts.path_and_query = Some(new_paq);
-                Uri::from_parts(parts)
-                    .context("trying to transform request URI for machine to handle")
-                    .map_err(Problem::internal_server_error)?
-            };
-            *req.uri_mut() = transformed_uri;
-            let output = state
-                .executor()
-                .machine_handle_http_request(
-                    state.clone(),
-                    compiled_binary.as_ref(),
-                    params.as_ref(),
-                    req,
-                )
-                .await
-                .map_err(Problem::internal_server_error)?
-                .map_err(Problem::guest_error)?;
-
-            Ok(output)
-        }
         _ => Err(Problem::not_found(path)),
     }
 }

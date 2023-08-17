@@ -17,8 +17,6 @@ To do this it doesn't need state and it doesn't need to communicate with other c
 
 At some point we want to allow programs to store state that they can access when they are re-activated as well as generate secret keys for `secp256k1`, `bls12_381`
 
-
-
 ### 3. TODO Federated state
 
 Finally, we want programs to be able to store state on multiple carol nodes working as a federation. Secret keys would be Shamir secret shared across these nodes as well.
@@ -84,7 +82,7 @@ Let's send a HTTP request to the machine which will activate the `attest_to_pric
 
 
 ```sh
-curl -v -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' "${carol_url}/machines/${machine_id}/activate/attest_to_price_at_minute"
+curl -v -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' "${carol_url}/machines/${machine_id}/http/activate/attest_to_price_at_minute"
 ```
 
 which at the time of writing returns:

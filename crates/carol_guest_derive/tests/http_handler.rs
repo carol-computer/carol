@@ -1,4 +1,4 @@
-use carol_guest::bind::exports::machine::Machine;
+use carol_guest::bind::exports::carol::machine::guest::Guest;
 use carol_guest::http;
 use carol_guest_derive::{activate, codec, machine};
 use core::any::Any;

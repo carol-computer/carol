@@ -296,6 +296,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
  "wit-component",
 ]
 

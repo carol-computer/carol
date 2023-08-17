@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context};
 use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::Message;
-use carol_core::BinaryId;
-use carol_host::Executor;
+use carol_core::{BinaryId, MachineId};
+use carol_host::{CompiledBinary, Executor};
 use clap::{Args, Parser, Subcommand};
 use clap_cargo::Workspace;
 use std::process::{Command, Stdio};
@@ -17,9 +17,35 @@ fn main() -> anyhow::Result<()> {
     // TODO return a proper enum, of output types, and serialize them in a
     // consistent manner. for only paths and SHA256 hashes are output.
     match &cli.command {
-        Commands::Build(opts) => println!("{}", opts.run()?),
-        Commands::Upload(opts) => println!("{}", opts.run()?),
-        Commands::Create(opts) => println!("{}", opts.run()?),
+        Commands::Build(opts) => println!("{}", opts.run(&Executor::new())?.0),
+        Commands::Upload(opts) => {
+            let server_opt = &opts.server;
+            let binary_id = opts.run(&Executor::new(), &server_opt.new_client())?;
+            if cli.quiet {
+                println!("{}", binary_id)
+            } else {
+                println!(
+                    "{}",
+                    server_opt.url_for(&format!("/binaries/{}", binary_id))
+                );
+            }
+        }
+        Commands::Create(opts) => {
+            let server_opt = &opts.implied_upload.server;
+            let machine_id = opts.run(&Executor::new(), &server_opt.new_client())?;
+            if cli.quiet {
+                println!("{}", machine_id);
+            } else {
+                println!(
+                    "{}",
+                    server_opt.url_for(&format!("/machines/{}", machine_id))
+                );
+            }
+        }
+        Commands::Api(opts) => {
+            let activations = opts.run(&Executor::new())?;
+            println!("{}", activations.join("\n"));
+        }
     };
 
     Ok(())
@@ -29,6 +55,10 @@ fn main() -> anyhow::Result<()> {
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    /// Write minial representation of output to stdout
+    /// e.g. instead of outputing the full url to the resource just output the id.
+    #[clap(short, long)]
+    quiet: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -36,8 +66,23 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Build(BuildOpts),
-    Upload(UploadOptsWrapper),
+    Upload(UploadOpts),
     Create(CreateOpts),
+    Api(ApiOpts),
+}
+
+/// Inspect
+#[derive(Args, Debug)]
+pub struct ApiOpts {
+    #[clap(flatten)]
+    implied_build: BuildOpts,
+    #[arg(
+        long,
+        value_name = "WASM_FILE",
+        group = "api",
+        conflicts_with = "build"
+    )]
+    binary: Option<Utf8PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -62,14 +107,14 @@ struct UploadOpts {
 
     #[clap(flatten)]
     implied_build: BuildOpts,
+
+    #[clap(flatten)]
+    server: ServerOpts,
 }
 
 #[derive(Args, Debug)]
 /// Create a machine from a component binary on a Carol server
 struct CreateOpts {
-    #[clap(flatten)]
-    server: ServerOpts,
-
     /// The ID of the compiled binary from which to create a machine (implied by --binary)
     #[arg(
         long,
@@ -82,10 +127,6 @@ struct CreateOpts {
 
     #[clap(flatten)]
     implied_upload: UploadOpts,
-
-    /// output the url rather than the machine id
-    #[clap(long, short)]
-    url: bool,
 }
 
 #[derive(Args, Debug)]
@@ -95,20 +136,18 @@ struct ServerOpts {
     carol_url: String,
 }
 
-// This wrapper is here because otherwise UploadOpts and CreateOpts specify
-// duplicate ServerOpts/carol URL, which shouldn't be global because it doesn't
-// actually apply to all commands
-#[derive(Args, Debug)]
-struct UploadOptsWrapper {
-    #[clap(flatten)]
-    server: ServerOpts,
+impl ServerOpts {
+    pub fn new_client(&self) -> Client {
+        Client::new(self.carol_url.clone())
+    }
 
-    #[clap(flatten)]
-    internal: UploadOpts,
+    pub fn url_for(&self, path: &str) -> String {
+        format!("{}{}", self.carol_url, path)
+    }
 }
 
 impl BuildOpts {
-    fn run(&self) -> anyhow::Result<Utf8PathBuf> {
+    fn run(&self, exec: &Executor) -> anyhow::Result<(Utf8PathBuf, CompiledBinary)> {
         // Find the crate package to compile
         let metadata = cargo_metadata::MetadataCommand::new()
             .exec()
@@ -215,35 +254,30 @@ impl BuildOpts {
         // warning before release, as this strongly assumes the client side
         // carlo binary and server side carol host exactly agree on the
         // definition of Executor::load_binary_from_wasm_file.
-        _ = Executor::new()
+        let compiled = exec
             .load_binary_from_wasm_file(&component_target)
             .context(format!(
                 "Compiled WASM component {component_target} was invalid"
             ))?;
 
-        Ok(component_target)
-    }
-}
-
-impl UploadOptsWrapper {
-    fn run(&self) -> anyhow::Result<BinaryId> {
-        let client = Client::new(self.server.carol_url.clone());
-        self.internal.run(&client)
+        Ok((component_target, compiled))
     }
 }
 
 impl UploadOpts {
-    fn run(&self, client: &Client) -> anyhow::Result<BinaryId> {
+    fn run(&self, exec: &Executor, client: &Client) -> anyhow::Result<BinaryId> {
         let binary = match &self.binary {
             Some(binary) => binary.clone(),
-            None => self
-                .implied_build
-                .run()
-                .context("Failed to build crate for upload")?,
+            None => {
+                self.implied_build
+                    .run(exec)
+                    .context("Failed to build crate for upload")?
+                    .0
+            }
         };
 
         // Validate and derive BinaryId
-        let binary_id = Executor::new()
+        let binary_id = exec
             .load_binary_from_wasm_file(&binary)
             .context("Couldn't load compiled binary")?
             .binary_id();
@@ -258,25 +292,40 @@ impl UploadOpts {
 }
 
 impl CreateOpts {
-    fn run(&self) -> anyhow::Result<String> {
-        let client = Client::new(self.server.carol_url.clone());
-
+    fn run(&self, exec: &Executor, client: &Client) -> anyhow::Result<MachineId> {
         let binary_id = match self.binary_id {
             Some(binary_id) => binary_id,
             None => self
                 .implied_upload
-                .run(&client)
+                .run(exec, &client)
                 .context("Failed to upload binary for machine creation")?,
         };
 
         let response = client.create_machine(&binary_id)?;
         let machine_id = response.id;
+        Ok(machine_id)
+    }
+}
 
-        if self.url {
-            Ok(format!("{}/machines/{}", self.server.carol_url, machine_id))
-        } else {
-            Ok(machine_id.to_string())
-        }
+impl ApiOpts {
+    fn run(&self, exec: &Executor) -> anyhow::Result<Vec<String>> {
+        let compiled = match &self.binary {
+            Some(binary) => exec.load_binary_from_wasm_file(&binary)?,
+            None => {
+                self.implied_build
+                    .run(exec)
+                    .context("Failed to build crate for upload")?
+                    .1
+            }
+        };
+
+        let binary_api =
+            tokio::runtime::Runtime::new()?.block_on(exec.get_binary_api(&compiled))?;
+        Ok(binary_api
+            .activations
+            .into_iter()
+            .map(|activation| activation.name)
+            .collect())
     }
 }
 
