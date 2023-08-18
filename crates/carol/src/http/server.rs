@@ -147,7 +147,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
         (&Method::POST, ["binaries"]) => {
             let body = slurp_request_body(&mut req).await?;
             let binary_id = BinaryId::new(&body);
-            let already_exists = state.get_binary(binary_id).is_some();
+            let already_exists = state.exec.get_binary(binary_id).is_some();
             let span = span!(
                 Level::INFO,
                 "POST /binaries",
@@ -162,6 +162,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 Ok(response)
             } else {
                 let compiled_binary = state
+                    .exec
                     .executor()
                     .load_binary_from_wasm_binary(&body)
                     .map_err(|e| {
@@ -173,7 +174,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                     })?;
 
                 debug_assert_eq!(compiled_binary.binary_id(), binary_id);
-                state.insert_binary(compiled_binary);
+                state.exec.insert_binary(compiled_binary);
                 event!(Level::INFO, "new binary uploaded");
                 Ok(build_response(&BinaryCreated { id: binary_id }))
             }
@@ -182,6 +183,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
             let binary_id = BinaryId::from_str(binary_id)
                 .map_err(|e| Problem::invalid_path_element::<BinaryId>(e.into(), binary_id))?;
             let binary = state
+                .exec
                 .get_binary(binary_id)
                 .ok_or(Problem::not_found(path))?;
 
@@ -189,7 +191,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 &Method::GET => {
                     let carol_host::guest::BinaryApi {
                         activations
-                    } = state.executor().get_binary_api(&binary).await.map_err(|e| Problem::bad_request("failed to retrieve API from binary", e))?;
+                    } = state.exec.executor().get_binary_api(&binary).await.map_err(|e| Problem::bad_request("failed to retrieve API from binary", e))?;
                     let response =  build_response(&carol_http::api::BinaryDescription {
                         activations: activations.into_iter().map(|carol_host::guest::ActivationDescription { name }| (name, carol_http::api::AcivationDescription {})).collect()
                     });
@@ -197,7 +199,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 }
                 &Method::POST => {
                     let params = slurp_request_body(&mut req).await?;
-                    let (already_exists, machine_id) = state.insert_machine(binary_id, params);
+                    let (already_exists, machine_id) = state.exec.insert_machine(binary_id, params);
                     let mut response = build_response(&MachineCreated { id: machine_id });
 
                     if already_exists {
@@ -223,10 +225,10 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 .map_err(|e| Problem::invalid_path_element::<MachineId>(e.into(), machine_id))?;
             let (binary_id, params, compiled_binary) = {
                 let (binary_id, params) = state
-                    .get_machine(machine_id)
+                    .exec.get_machine(machine_id)
                     .ok_or(Problem::not_found(path))?;
                 let compiled_binary = state
-                    .get_binary(binary_id)
+                    .exec.get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
                 (binary_id, params, compiled_binary)
             };
@@ -246,6 +248,10 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                     }
                 },
                 ["http", inner_path @ ..] => {
+                    // we need to direct /http to /http/ so relative urls work in the machine
+                    if inner_path.is_empty() && !req.uri().path().ends_with('/') {
+                        return Ok(Response::builder().header(header::LOCATION, "http/").status(StatusCode::PERMANENT_REDIRECT).body(Body::empty()).unwrap())
+                    }
                     let transformed_uri = {
                         let mut parts = req.uri().clone().into_parts();
                         let mut new_paq = format!("/{}", inner_path.join("/"));
@@ -264,6 +270,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                     };
                     *req.uri_mut() = transformed_uri;
                     let output = state
+                        .exec
                         .executor()
                         .machine_handle_http_request(
                             state.clone(),
@@ -283,6 +290,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                         &Method::POST => {
                             let activation_input = slurp_request_body(&mut req).await?;
                             let output = state
+                                .exec
                                 .executor()
                                 .activate_machine(
                                     state.clone(),
@@ -396,6 +404,9 @@ impl Handler {
                 let status = problem.status;
                 let body = problem.into_json_body();
                 let mut response = Response::new(Body::from(body));
+                response
+                    .headers_mut()
+                    .append(header::CONTENT_TYPE, "application/json".parse().unwrap());
                 *response.status_mut() = status;
                 Ok(response)
             }

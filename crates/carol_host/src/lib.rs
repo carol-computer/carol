@@ -1,6 +1,5 @@
 mod host_bindings;
 mod state;
-use carol_bls as bls;
 pub use state::*;
 
 use anyhow::Context;
@@ -17,6 +16,12 @@ use wasmtime::{Config, Engine, Store};
 #[derive(Clone)]
 pub struct Executor {
     engine: Engine,
+}
+
+impl Default for Executor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone)]
@@ -90,9 +95,7 @@ impl Executor {
         compiled_binary: &CompiledBinary,
     ) -> anyhow::Result<host_bindings::guest::BinaryApi> {
         let dummy_host = Host {
-            machine_id: MachineId::from_bytes([0u8; 32]),
-            state: State::new(self.clone(), bls::KeyPair::from_bytes([42u8; 32]).unwrap()),
-            env: Environment::Http,
+            env: Environment::BinaryApi,
             panic_message: None,
         };
 
@@ -138,11 +141,10 @@ impl Executor {
         let mut store = Store::new(
             &self.engine,
             Host {
-                machine_id,
-                state,
                 env: Environment::Activation {
-                    bls_keypair: bls::KeyPair::random(&mut rand::thread_rng()),
                     http_client: reqwest::Client::new(),
+                    machine_id,
+                    state,
                 },
                 panic_message: None,
             },
@@ -214,9 +216,7 @@ impl Executor {
         let mut store = Store::new(
             &self.engine,
             Host {
-                machine_id,
-                state,
-                env: Environment::Http,
+                env: Environment::Http { machine_id, state },
                 panic_message: None,
             },
         );
@@ -283,11 +283,5 @@ impl Executor {
                 }
             })),
         }
-    }
-}
-
-impl Default for Executor {
-    fn default() -> Self {
-        Self::new()
     }
 }
