@@ -98,6 +98,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                                     == Some("with_serde".into())
                                 {
                                     attrs.push(parse_quote!(#[bincode(with_serde)]));
+                                    if activate_opts.http.is_some() {
+                                        let tokens = attr.tokens;
+                                        if !tokens.is_empty() {
+                                            attrs.push(parse_quote!(#[serde #tokens]));
+                                        }
+                                    }
                                 } else {
                                     return quote_spanned!(attr.span() => compile_error!("only 'with_serde' is a valid function argument attribute"));
                                 }
