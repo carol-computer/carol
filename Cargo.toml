@@ -2,7 +2,7 @@
 
 members = [
     "example-guests/hello_world",
-    "example-guests/bitmex",
+    "example-guests/bitmex_oracle",
     "crates/carol_guest",
     "crates/carol_host",
     "crates/carol_guest_derive",

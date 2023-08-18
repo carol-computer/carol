@@ -177,7 +177,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbe3c979c178231552ecba20214a8272df4e09f232a87aef4320cf06539aded"
 
 [[package]]
-name = "bitmex_guest"
+name = "bitmex_oracle"
 version = "0.1.0"
 dependencies = [
  "bincode 2.0.0-rc.3",

@@ -46,7 +46,7 @@ impl Foo {
 fn post_request() {
     let _response = Foo::handle_http(http::Request {
         method: http::Method::Post,
-        uri: "/activate/post_add".into(),
+        uri: "/post_add".into(),
         body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
         headers: vec![],
     });
@@ -57,7 +57,7 @@ fn post_request() {
 fn get_request() {
     let _response = Foo::handle_http(http::Request {
         method: http::Method::Get,
-        uri: "/activate/get_add?lhs=3&rhs=4".into(),
+        uri: "/get_add?lhs=3&rhs=4".into(),
         body: vec![],
         headers: vec![],
     });
@@ -89,7 +89,7 @@ fn custom_path_post() {
 fn post_request_invalid_params() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Post,
-        uri: "/activate/post_add".into(),
+        uri: "/post_add".into(),
         body: r#"{"lhs": 3, "rhs": "foo"}"#.as_bytes().to_vec(),
         headers: vec![],
     });
@@ -101,7 +101,7 @@ fn post_request_invalid_params() {
 fn get_request_invalid_params() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Get,
-        uri: "/activate/get_add?lhs=3&rhs=foo".into(),
+        uri: "/get_add?lhs=3&rhs=foo".into(),
         body: vec![],
         headers: vec![],
     });
@@ -113,7 +113,7 @@ fn get_request_invalid_params() {
 fn method_not_allowed() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Post,
-        uri: "/activate/get_add".into(),
+        uri: "/get_add".into(),
         body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
         headers: vec![],
     });
@@ -126,7 +126,7 @@ fn method_not_allowed() {
 fn method_wihout_http_should_404() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Get,
-        uri: "/activate/no_http".into(),
+        uri: "/no_http".into(),
         body: vec![],
         headers: vec![],
     });

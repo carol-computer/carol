@@ -169,7 +169,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let http_endpoint = activate_opts.http.map(|http_opt| {
                 let route_path = match &http_opt.path {
                     Some(litstr) => litstr.clone(),
-                    None => LitStr::new(&format!("/activate/{}", method.sig.ident), sig_span),
+                    None => LitStr::new(&format!("/{}", method.sig.ident), sig_span),
                 };
 
                 HttpEndpoint {
