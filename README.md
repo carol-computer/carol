@@ -29,6 +29,7 @@ There are example guest machine definitions in [`example-guests`](./example-gues
 of them and run it on a temporary machine:
 
 ``` shell
+cd .. # move above project directory
 cp -r carol/example-guests/bitmex_oracle my_machine
 cd my_machine
 carlo run
@@ -53,31 +54,51 @@ you just created will give you a greeting page and explain how to use it.
 
 ## Run your own carol node
 
+### Install
+
 First clone the repository and then `cd` into it and run:
 
 ``` sh
-carlo --cfg carol.yml config-gen
+cargo install --path crates/carol
+carol --help
 ```
+
+..or it can be run from the project directory:
+
+``` sh
+cargo run -p carol -- --help
+```
+
+### Configure
+
+Then generate a config file.
+
+``` sh
+carol --cfg carol.yml config-gen
+```
+
+### Run
 
 This will generate a default configuration (along with some secret keys!) and put them in `carol.yml`.
 
 ``` sh
-carlo --cfg carol.yml run &
+carol --cfg carol.yml run &
 ```
 
 ### Full carlo workflow
 
-To compile a standalone WASM binary. Here we just compile one of the examples in `example-guests`.
+To compile a standalone WASM binary. Here we just compile one of the examples in `example-guests`
+(must be run in project directory).
 
 ``` sh
-wasm_output_file=$( carlo build -p bitmex_guest )
+wasm_output_file=$( carlo build -p bitmex_oracle )
 ```
 
 Then upload it to carol:
 
 ``` sh
 carol_url=http://localhost:8000
-binary_id=$( carlo upload --carol-url "${carol_url}" --binary "${wasm_output_file}" )
+binary_id=$( carlo -q upload --carol-url "${carol_url}" --binary "${wasm_output_file}" )
 ```
 
 Note this `id` is just a hash of the binary. In general it's intended for client software to
@@ -89,7 +110,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-machine_id=$( carlo create --carol-url "${carol_url}" --binary-id "${binary_id}" )
+machine_id=$( carlo -q create --carol-url "${carol_url}" --binary-id "${binary_id}" )
 ```
 
 Note this `id` is a hash of the binary and the (empty) parameterization vector. In general it's
@@ -104,11 +125,21 @@ At the time of writing it's:
 - `attest_to_price_at_minute`
 - `bit_decompose_attest_to_price_at_minute`
 
+We can actual inspect the binary for its activation methods with:
+
+``` sh
+carlo api -p bitmex_oracle
+```
+
+(this just displays the names of them for now)
+
 Let's send a HTTP request to the machine which will activate the `attest_to_price_at_minute` which will fetch the price of the symbol we ask for at the time we ask for.
 
 
 ```sh
-curl -v -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' "${carol_url}/machines/${machine_id}/http/activate/attest_to_price_at_minute"
+$ curl -vGf "${carol_url}/machines/${machine_id}/http/attest_to_price_at_minute" \
+-d time=2023-04-16T12:30:00Z \
+-d symbol=.BXBT
 ```
 
 which at the time of writing returns:

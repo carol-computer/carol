@@ -390,17 +390,19 @@ impl RunOpts {
         let (binary_id, machine_id) = implied_create.run(exec, &client)?;
 
         eprintln!("=== 🤖 MACHINE CREATED 🤖 ===");
-        println!("server url: {}", server_opts.url_for(""));
+        println!("binary_id={binary_id}");
+        println!("machine_id={machine_id}");
+        println!("carol_url={}", server_opts.url_for(""));
         println!(
-            "binary url: {}",
+            "binary_url={}",
             server_opts.url_for(&format!("/binaries/{binary_id}"))
         );
         println!(
-            "machine url: {}",
+            "machine_url={}",
             server_opts.url_for(&format!("/machines/{machine_id}"))
         );
         println!(
-            "machine HTTP url: {}",
+            "machine_http_url={}",
             server_opts.url_for(&format!("/machines/{machine_id}/http/"))
         );
 
