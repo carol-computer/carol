@@ -34,6 +34,7 @@ impl Default for HttpServerConfig {
 }
 
 #[derive(Default, Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Level {
     Error,
     Warn,

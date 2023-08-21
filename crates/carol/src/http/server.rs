@@ -10,6 +10,8 @@ use hyper::{body::HttpBody, Body, Method, Request, Response, Server, StatusCode}
 use hyper::{header, Uri};
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::future::Future;
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{event, span, Instrument, Level};
@@ -414,7 +416,10 @@ impl Handler {
     }
 }
 
-pub async fn start(config: config::HttpServerConfig, state: State) -> anyhow::Result<()> {
+pub fn start(
+    config: config::HttpServerConfig,
+    state: State,
+) -> anyhow::Result<(SocketAddr, impl Future<Output = ()> + Send + Sync + 'static)> {
     let mut resource_map: HashMap<String, Vec<u8>> = config
         .resources
         .into_iter()
@@ -430,7 +435,7 @@ pub async fn start(config: config::HttpServerConfig, state: State) -> anyhow::Re
     resource_map
         .entry("guest-default.css".into())
         .or_insert_with(|| {
-            event!(Level::INFO, "using guest-default.css from carol build");
+            event!(Level::DEBUG, "using guest-default.css from carol build");
             include_bytes!("../../resources/guest-default.css").to_vec()
         });
     let resource_map = Arc::new(resource_map);
@@ -446,8 +451,20 @@ pub async fn start(config: config::HttpServerConfig, state: State) -> anyhow::Re
         async move { Ok::<_, Infallible>(service_fn(service)) }
     });
 
-    event!(Level::INFO, "Binding http server to {}", config.listen);
+    event!(Level::DEBUG, "Try to bind http server to {}", config.listen);
 
-    // Then bind and serve...
-    Ok(Server::bind(&config.listen).serve(make_service).await?)
+    // bind first so we can figure out which port we actually listened on
+    let server = Server::bind(&config.listen).serve(make_service);
+    let local_addr = server.local_addr();
+    let server = async {
+        match server.await {
+            Ok(_) => event!(Level::INFO, "HTTP server shut down"),
+            Err(e) => event!(
+                Level::ERROR,
+                error = e.to_string(),
+                "HTTP server unexpectedly shut down"
+            ),
+        }
+    };
+    Ok((local_addr, server))
 }

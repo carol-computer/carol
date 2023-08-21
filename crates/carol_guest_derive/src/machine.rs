@@ -219,13 +219,13 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         http_match_arms.push(parse_quote! { "/" => {
             match __method {
                 carol_guest::http::Method::Get => http::Response {
-                    headers: vec![],
+                    headers: vec![("Content-Type".into(), "text/html".as_bytes().to_vec())],
                     body: #welcome_literal.to_vec(),
                     status: 200,
                 },
                 _ => http::Response {
                     headers: vec![("Allow".to_string(), "GET".as_bytes().to_vec())],
-                    body: #welcome_literal.to_vec(),
+                    body: vec![],
                     status: 405,
                 }
             }

@@ -288,6 +288,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
+ "carol",
+ "carol_bls",
  "carol_core",
  "carol_host",
  "carol_http",
@@ -297,6 +299,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "wit-component",
 ]
 

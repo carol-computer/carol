@@ -14,9 +14,14 @@ use client::Client;
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // TODO return a proper enum, of output types, and serialize them in a
-    // consistent manner. for only paths and SHA256 hashes are output.
-    match &cli.command {
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(cli.log_level)
+        .pretty()
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    match cli.command {
         Commands::Build(opts) => println!("{}", opts.run(&Executor::new())?.0),
         Commands::Upload(opts) => {
             let server_opt = &opts.server;
@@ -32,7 +37,7 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Create(opts) => {
             let server_opt = &opts.implied_upload.server;
-            let machine_id = opts.run(&Executor::new(), &server_opt.new_client())?;
+            let (_, machine_id) = opts.run(&Executor::new(), &server_opt.new_client())?;
             if cli.quiet {
                 println!("{}", machine_id);
             } else {
@@ -45,6 +50,9 @@ fn main() -> anyhow::Result<()> {
         Commands::Api(opts) => {
             let activations = opts.run(&Executor::new())?;
             println!("{}", activations.join("\n"));
+        }
+        Commands::Run(opts) => {
+            opts.run(&Executor::new())?;
         }
     };
 
@@ -59,6 +67,8 @@ struct Cli {
     /// e.g. instead of outputing the full url to the resource just output the id.
     #[clap(short, long)]
     quiet: bool,
+    #[clap(long, default_value = "info")]
+    log_level: tracing::Level,
     #[command(subcommand)]
     command: Commands,
 }
@@ -69,6 +79,7 @@ enum Commands {
     Upload(UploadOpts),
     Create(CreateOpts),
     Api(ApiOpts),
+    Run(RunOpts),
 }
 
 /// Inspect
@@ -129,9 +140,8 @@ struct CreateOpts {
     implied_upload: UploadOpts,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 struct ServerOpts {
-    /// The Carol server's URL (e.g. http://localhost:8000, see README.md)
     #[arg(long)] // , default_value = "http://localhost:8000")] ?
     carol_url: String,
 }
@@ -292,7 +302,7 @@ impl UploadOpts {
 }
 
 impl CreateOpts {
-    fn run(&self, exec: &Executor, client: &Client) -> anyhow::Result<MachineId> {
+    fn run(&self, exec: &Executor, client: &Client) -> anyhow::Result<(BinaryId, MachineId)> {
         let binary_id = match self.binary_id {
             Some(binary_id) => binary_id,
             None => self
@@ -303,7 +313,7 @@ impl CreateOpts {
 
         let response = client.create_machine(&binary_id)?;
         let machine_id = response.id;
-        Ok(machine_id)
+        Ok((binary_id, machine_id))
     }
 }
 
@@ -326,6 +336,77 @@ impl ApiOpts {
             .into_iter()
             .map(|activation| activation.name)
             .collect())
+    }
+}
+
+#[derive(Args, Debug)]
+/// Build and then run the machine on a carol server for testing purposes.
+///
+/// The server will have an insecure (dummy) keypair.
+pub struct RunOpts {
+    /// The binary (WASM component) to upload (implied by --package)
+    #[arg(
+        long,
+        value_name = "WASM_FILE",
+        group = "upload",
+        conflicts_with = "build"
+    )]
+    binary: Option<Utf8PathBuf>,
+
+    #[clap(flatten)]
+    implied_build: BuildOpts,
+
+    /// Where the temporary server should listen
+    #[clap(short, long, default_value = "127.0.0.0:0")]
+    listen: std::net::SocketAddr,
+}
+
+impl RunOpts {
+    fn run(self, exec: &Executor) -> anyhow::Result<()> {
+        let state = carol_host::State::new(carol_bls::KeyPair::from_bytes([42u8; 32]).unwrap());
+        let rt = tokio::runtime::Runtime::new()?;
+        let _enter_guard = rt.enter();
+        let http_server_config = carol::config::HttpServerConfig {
+            listen: self.listen,
+            ..Default::default()
+        };
+
+        let (bound_addr, server) = carol::http::server::start(http_server_config, state)
+            .expect("should be able to start HTTP server");
+        let handle = rt.spawn(server);
+        let server_opts = ServerOpts {
+            carol_url: format!("http://{bound_addr}"),
+        };
+        let client = server_opts.new_client();
+
+        let implied_create = CreateOpts {
+            binary_id: None,
+            implied_upload: UploadOpts {
+                binary: self.binary,
+                implied_build: self.implied_build,
+                server: server_opts.clone(),
+            },
+        };
+        let (binary_id, machine_id) = implied_create.run(exec, &client)?;
+
+        eprintln!("=== 🤖 MACHINE CREATED 🤖 ===");
+        println!("server url: {}", server_opts.url_for(""));
+        println!(
+            "binary url: {}",
+            server_opts.url_for(&format!("/binaries/{binary_id}"))
+        );
+        println!(
+            "machine url: {}",
+            server_opts.url_for(&format!("/machines/{machine_id}"))
+        );
+        println!(
+            "machine HTTP url: {}",
+            server_opts.url_for(&format!("/machines/{machine_id}/http/"))
+        );
+
+        rt.block_on(handle)?;
+
+        Ok(())
     }
 }
 

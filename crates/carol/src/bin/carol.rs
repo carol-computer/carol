@@ -56,7 +56,11 @@ pub async fn main() -> anyhow::Result<()> {
 
             let state = State::new(config.bls_secret_key);
 
-            carol::http::server::start(config.http_server, state).await?;
+            let (local_addr, server) = carol::http::server::start(config.http_server, state)?;
+
+            event!(Level::INFO, "bound HTTP server to {}", local_addr);
+
+            server.await;
         }
         Commands::ConfigGen => {
             if file_path.exists() {

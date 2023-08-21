@@ -8,50 +8,76 @@ their program so that others can have confidence that the program will be run fa
 
 ## Quick start
 
-There are example guest machine definitions in [`example-guests`](./example-guests). Let's compile
-the binary, upload it and create the machine in one go using `carlo`:
+First, make sure you've got the WASM target installed:
 
-``` shell
-cargo run -p carlo -- create --carol-url https://carol.computer -p bitmex_oracle
+```
+rustup target add wasm32-unknown-unknown
 ```
 
-This will output a url to the machine you just created. Put a `/http` on the end of it the machine
-you just created will give you a greeting page and explain how to use it. To create your own
-machine, copy one of the example crates in [`example-guests`](./example-guests) into its own repository.
-
-You might want to install carlo:
+### Install `carlo` (optional)
 
 ```sh
 cargo install --path crates/carol
 ```
+
+Otherwise you have to run `cargo run -p carlo` form the project directory instead of running `carlo`:
+
+
+### Run a machine locally
+
+There are example guest machine definitions in [`example-guests`](./example-guests). Let's copy one
+of them and run it on a temporary machine:
+
+``` shell
+cp -r carol/example-guests/bitmex_oracle my_machine
+cd my_machine
+carlo run
+```
+
+if you're using `cargo` from the project directory, use: `cargo run -p carlo -- run -p ../my_machine` from the project directory.
+
+You should see a few urls in the output for the machine. Try visiting the machine's HTTP url to see
+it's HTML landing page.
+
+### Run the machine on a public carol server
+
+After developing a machine we want to deploy we can run it on a public carol server:
+
+
+``` shell
+carol create --carol-url https://carol.computer
+```
+
+This will output a url to the machine you just created. Put a `/http/` on the end of it the machine
+you just created will give you a greeting page and explain how to use it.
 
 ## Run your own carol node
 
 First clone the repository and then `cd` into it and run:
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml config-gen
+carlo --cfg carol.yml config-gen
 ```
 
 This will generate a default configuration (along with some secret keys!) and put them in `carol.yml`.
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml run &
+carlo --cfg carol.yml run &
 ```
 
 ### Full carlo workflow
 
-First compile a WASM binary. Here we just compile one of the examples in `example-guests`.
+To compile a standalone WASM binary. Here we just compile one of the examples in `example-guests`.
 
 ``` sh
-wasm_output_file=$( cargo run -p carlo -- build -p bitmex_guest )
+wasm_output_file=$( carlo build -p bitmex_guest )
 ```
 
 Then upload it to carol:
 
 ``` sh
 carol_url=http://localhost:8000
-binary_id=$( cargo run -p carlo -- upload --carol-url "${carol_url}" --binary "${wasm_output_file}" )
+binary_id=$( carlo upload --carol-url "${carol_url}" --binary "${wasm_output_file}" )
 ```
 
 Note this `id` is just a hash of the binary. In general it's intended for client software to
@@ -63,7 +89,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-machine_id=$( cargo run -p carlo -- create --carol-url "${carol_url}" --binary-id "${binary_id}" )
+machine_id=$( carlo create --carol-url "${carol_url}" --binary-id "${binary_id}" )
 ```
 
 Note this `id` is a hash of the binary and the (empty) parameterization vector. In general it's

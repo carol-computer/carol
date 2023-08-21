@@ -179,7 +179,7 @@ impl ActivationList {
                             let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
                             let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
                             http::Response {
-                                headers: vec![],
+                                headers: vec![("Content-Type".into(), "application/json".as_bytes().to_vec())],
                                 status: 200,
                                 body: json_encoded_output
                             }
