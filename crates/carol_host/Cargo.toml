@@ -12,7 +12,6 @@ reqwest = {  version = "0.11.16", features = ["rustls-tls"], default-features = 
 http_crate = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1"
-rand = "0.8"
 tracing = { workspace = true }
 carol_core = { workspace = true }
 hyper = { workspace = true }
