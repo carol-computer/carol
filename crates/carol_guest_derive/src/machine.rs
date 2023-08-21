@@ -190,6 +190,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let method_name_str = method_name.to_string();
             match_arms.push(parse_quote_spanned! { sig_span => #method_name_str => {
                 let (__method_input, _) = bincode::decode_from_slice::<#struct_path, _>(&__input, bincode::config::standard()).expect(#input_decode_expect);
+                #[allow(clippy::let_unit_value)]
                 let __output = #activate_call;
                 carol_guest::bincode::encode_to_vec(__output, carol_guest::bincode::config::standard()).expect(#encode_output_expect)
             }});

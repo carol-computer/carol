@@ -297,7 +297,7 @@ impl CreateOpts {
             Some(binary_id) => binary_id,
             None => self
                 .implied_upload
-                .run(exec, &client)
+                .run(exec, client)
                 .context("Failed to upload binary for machine creation")?,
         };
 
@@ -310,7 +310,7 @@ impl CreateOpts {
 impl ApiOpts {
     fn run(&self, exec: &Executor) -> anyhow::Result<Vec<String>> {
         let compiled = match &self.binary {
-            Some(binary) => exec.load_binary_from_wasm_file(&binary)?,
+            Some(binary) => exec.load_binary_from_wasm_file(binary)?,
             None => {
                 self.implied_build
                     .run(exec)

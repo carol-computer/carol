@@ -75,7 +75,7 @@ impl ActivationList {
         }
 
         self.methods
-            .insert(activation.sig.ident.to_string(), activation.clone());
+            .insert(activation.sig.ident.to_string(), activation);
     }
 
     pub fn binary_api(&self) -> syn::ExprStruct {
