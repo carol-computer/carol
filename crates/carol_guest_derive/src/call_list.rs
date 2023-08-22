@@ -167,17 +167,35 @@ impl ActivationList {
                         let bincode_decode_output_expect = format!(
                             "#[activate] bincode decoding the output of {} to type {}",
                             method_name,
-                            ty.to_token_stream()
+                            ty.span()
+                                .source_text()
+                                .unwrap_or(ty.to_token_stream().to_string())
                         );
                         let json_encode_output_expect = format!(
                             "#[activate] JSON encoding the output of {} from type {}",
                             method_name,
-                            ty.to_token_stream()
+                            ty.span()
+                                .source_text()
+                                .unwrap_or(ty.to_token_stream().to_string())
                         );
 
+                        let encode_output = quote_spanned! { ty.span() => carol_guest::serde_json::to_vec_pretty(&__decoded_output).expect(#json_encode_output_expect)
+                        };
+
+                        if let syn::Type::Path(type_path) = &*ty {
+                            let last = type_path
+                                .path
+                                .segments
+                                .last()
+                                .map(|segment| segment.ident.to_string());
+                            if Some("Result".into()) == last {
+                                // TODO: Do something different with results so we map Result Err to HTTP status codes
+                            }
+                        }
+
                         quote_spanned! { ty.span() =>  {
-                            let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
-                            let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
+                            let (__decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
+                            let json_encoded_output = #encode_output;
                             http::Response {
                                 headers: vec![("Content-Type".into(), "application/json".as_bytes().to_vec())],
                                 status: 200,
