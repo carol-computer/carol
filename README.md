@@ -137,7 +137,7 @@ Let's send a HTTP request to the machine which will activate the `attest_to_pric
 
 
 ```sh
-$ curl -vGf "${carol_url}/machines/${machine_id}/http/attest_to_price_at_minute" \
+curl -vG "${carol_url}/machines/${machine_id}/http/attest_to_price_at_minute" \
 -d time=2023-04-16T12:30:00Z \
 -d symbol=.BXBT
 ```

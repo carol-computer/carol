@@ -54,11 +54,11 @@ impl BitMexAttest {
     #[activate(http(GET))]
     pub fn bit_decompose_attest_to_price_at_minute(
         &self,
-        cap: &(impl bls::Cap + http::Cap),
+        cap: &(impl bls::Cap + http::Cap + log::Cap),
         #[with_serde(with = "time::serde::iso8601")] time: time::OffsetDateTime,
         symbol: String,
         n_bits: u8,
-    ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, http::Error> {
+    ) -> Result<AttestIndexPrice<Vec<bls::Signature>>, Error> {
         let price = self.index_price_at_minute(cap, &symbol, time)?;
 
         let capped_price = price.min((1 << n_bits) - 1);
@@ -92,10 +92,10 @@ impl BitMexAttest {
     #[activate(http(GET))]
     pub fn attest_to_price_at_minute(
         &self,
-        cap: &(impl bls::Cap + http::Cap),
+        cap: &(impl bls::Cap + http::Cap + log::Cap),
         #[with_serde(with = "time::serde::iso8601")] time: time::OffsetDateTime,
         symbol: String,
-    ) -> Result<AttestIndexPrice<bls::Signature>, http::Error> {
+    ) -> Result<AttestIndexPrice<bls::Signature>, Error> {
         let price = self.index_price_at_minute(cap, &symbol, time)?;
         let message = AttestMessage {
             price,
@@ -112,10 +112,10 @@ impl BitMexAttest {
 
     pub fn index_price_at_minute(
         &self,
-        cap: &impl http::Cap,
+        cap: &(impl http::Cap + log::Cap),
         symbol: &str,
         time: time::OffsetDateTime,
-    ) -> Result<u64, http::Error> {
+    ) -> Result<u64, Error> {
         let mut url = url::Url::parse("https://www.bitmex.com/api/v1/instrument/compositeIndex")
             .expect("valid url");
 
@@ -150,10 +150,44 @@ impl BitMexAttest {
             .append_pair("filter", &filter)
             .append_pair("columns", "lastPrice,timestamp"); // only necessary fields
 
-        let response = cap.http_get(url.as_str())?;
-        let price_at_time = serde_json::from_slice::<[Price; 1]>(&response.body).unwrap()[0];
+        let response = cap.http_get(url.as_str()).map_err(|e| Error {
+            url: url.clone().into(),
+            problem: Problem::Error(e),
+        })?;
+
+        cap.log_info(&format!("status for {} was {}", url, response.status()));
+
+        if !response.status().is_success() {
+            return Err(Error {
+                url: url.clone().into(),
+                problem: Problem::BadStatus {
+                    status: response.status,
+                },
+            });
+        }
+        let price_at_time =
+            serde_json::from_slice::<[Price; 1]>(&response.body).map_err(|e| Error {
+                url: url.clone().into(),
+                problem: Problem::Deserialization {
+                    error: e.to_string(),
+                },
+            })?[0];
         Ok(price_at_time.last_price.floor() as u64)
     }
+}
+
+#[derive(bincode::Decode, bincode::Encode, serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct Error {
+    pub url: String,
+    pub problem: Problem,
+}
+
+#[derive(bincode::Decode, bincode::Encode, serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(tag = "kind")]
+pub enum Problem {
+    Error(http::Error),
+    BadStatus { status: u16 },
+    Deserialization { error: String },
 }
 
 #[cfg(test)]
