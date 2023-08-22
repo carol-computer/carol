@@ -49,9 +49,7 @@ After developing a machine we want to deploy we can run it on a public carol ser
 carol create --carol-url https://carol.computer
 ```
 
-This will output a url to the machine you just created. Put a `/http/` on the end of it the machine
-you just created will give you a greeting page and explain how to use it.
-
+This will output a url to the machine you just created.
 ## Run your own carol node
 
 ### Install
@@ -85,7 +83,7 @@ This will generate a default configuration (along with some secret keys!) and pu
 carol --cfg carol.yml run &
 ```
 
-### Full carlo workflow
+## Full carlo workflow
 
 To compile a standalone WASM binary. Here we just compile one of the examples in `example-guests`
 (must be run in project directory).
