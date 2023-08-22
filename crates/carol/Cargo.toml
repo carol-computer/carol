@@ -13,7 +13,7 @@ serde = { workspace = true }
 serde_yaml = "0.9"
 tracing = { workspace = true }
 clap = {  version = "4", features = ["derive"] }
-tracing-subscriber = "0.3"
+tracing-subscriber.workspace = true
 carol_host = { workspace = true }
 carol_http = { workspace = true }
 carol_core = { workspace = true, features = ["std"] }

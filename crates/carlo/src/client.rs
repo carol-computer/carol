@@ -3,7 +3,7 @@ pub use carol_core::BinaryId;
 pub use carol_http::api::{BinaryCreated, MachineCreated};
 
 pub struct Client {
-    base: String,
+    pub base: String,
     http_client: reqwest::blocking::Client,
 }
 

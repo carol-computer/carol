@@ -96,6 +96,13 @@ impl Request {
     }
 }
 
+impl Response {
+    pub fn status(&self) -> http_crate::StatusCode {
+        http_crate::StatusCode::from_u16(self.status)
+            .expect("status is valid if this comes from host")
+    }
+}
+
 impl From<http_crate::Error> for Error {
     fn from(e: http_crate::Error) -> Self {
         use http_crate::{header, uri};

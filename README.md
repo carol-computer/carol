@@ -1,59 +1,104 @@
 # Carol - A programmable third party for any protocol
 
-Carol is a [*serverless*](https://en.wikipedia.org/wiki/Serverless_computing) computing service that runs user uploaded programs.
-At the moment the programs run on only one machine but in the end goal is to have the programs be run between *federations* of carol nodes.
-The purpose of Carols is not to "outsource" computing to the cloud like in traditional compute providers.
-A user asks Carol to run their program so that others can have confidence that the program will be run faithfully without having to trust a single party.
+Carol is a [*serverless*](https://en.wikipedia.org/wiki/Serverless_computing) computing service that
+runs user uploaded programs. At the moment the programs run on only one machine but in the end goal
+is to have the programs be run between *federations* of carol nodes. The purpose of Carol is not to
+"outsource" computing to the cloud like in traditional compute providers. A user asks Carol to run
+their program so that others can have confidence that the program will be run faithfully.
+
+## Quick start
+
+First, make sure you've got the WASM target installed:
+
+```
+rustup target add wasm32-unknown-unknown
+```
+
+### Install `carlo` (optional)
+
+```sh
+cargo install --path crates/carol
+```
+
+Otherwise you have to run `cargo run -p carlo` form the project directory instead of running `carlo`:
 
 
-## Roadmap
+### Run a machine locally
 
-### 1. Stateless oracles
+There are example guest machine definitions in [`example-guests`](./example-guests). Let's copy one
+of them and run it on a temporary machine:
 
-The first milesone is to have carol functioning as a programmable BLS-based DLC oracle for the protocol described in *[Cryptographic Oracle-Based Conditional Payments]*.
-To do this it doesn't need state and it doesn't need to communicate with other carol nodes.
+``` shell
+cd .. # move above project directory
+cp -r carol/example-guests/bitmex_oracle my_machine
+cd my_machine
+carlo run
+```
 
-### 2. TODO Local state
+if you're using `cargo` from the project directory, use: `cargo run -p carlo -- run -p ../my_machine` from the project directory.
 
-At some point we want to allow programs to store state that they can access when they are re-activated as well as generate secret keys for `secp256k1`, `bls12_381`
+You should see a few urls in the output for the machine. Try visiting the machine's HTTP url to see
+it's HTML landing page.
+
+### Run the machine on a public carol server
+
+After developing a machine we want to deploy we can run it on a public carol server:
 
 
+``` shell
+carol create --carol-url https://carol.computer
+```
 
-### 3. TODO Federated state
+This will output a url to the machine you just created. Put a `/http/` on the end of it the machine
+you just created will give you a greeting page and explain how to use it.
 
-Finally, we want programs to be able to store state on multiple carol nodes working as a federation. Secret keys would be Shamir secret shared across these nodes as well.
+## Run your own carol node
 
-
-## Run it
-
-### Generate a config and run
+### Install
 
 First clone the repository and then `cd` into it and run:
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml config-gen
+cargo install --path crates/carol
+carol --help
 ```
+
+..or it can be run from the project directory:
+
+``` sh
+cargo run -p carol -- --help
+```
+
+### Configure
+
+Then generate a config file.
+
+``` sh
+carol --cfg carol.yml config-gen
+```
+
+### Run
 
 This will generate a default configuration (along with some secret keys!) and put them in `carol.yml`.
 
 ``` sh
-cargo run -p carol -- --cfg carol.yml run &
+carol --cfg carol.yml run &
 ```
 
+### Full carlo workflow
 
-### Uploading a program
-
-First compile it to wasm. Here we just compile one of the examples in `example-guests`.
+To compile a standalone WASM binary. Here we just compile one of the examples in `example-guests`
+(must be run in project directory).
 
 ``` sh
-wasm_output=$( cargo run -p carlo -- build -p bitmex_guest )
+wasm_output_file=$( carlo build -p bitmex_oracle )
 ```
 
 Then upload it to carol:
 
 ``` sh
 carol_url=http://localhost:8000
-binary_id=$( cargo run -p carlo -- upload --carol-url "${carol_url}" --binary "${wasm_output}" )
+binary_id=$( carlo -q upload --carol-url "${carol_url}" --binary "${wasm_output_file}" )
 ```
 
 Note this `id` is just a hash of the binary. In general it's intended for client software to
@@ -65,7 +110,7 @@ server.
 Carol machines are created from a binary and a parameterization array. Most machines will have an empty parameterization for now so we make an empty POST request to t
 
 ``` sh
-machine_id=$( cargo run -p carlo -- create --carol-url "${carol_url}" --binary-id "${binary_id}" )
+machine_id=$( carlo -q create --carol-url "${carol_url}" --binary-id "${binary_id}" )
 ```
 
 Note this `id` is a hash of the binary and the (empty) parameterization vector. In general it's
@@ -80,11 +125,21 @@ At the time of writing it's:
 - `attest_to_price_at_minute`
 - `bit_decompose_attest_to_price_at_minute`
 
+We can actual inspect the binary for its activation methods with:
+
+``` sh
+carlo api -p bitmex_oracle
+```
+
+(this just displays the names of them for now)
+
 Let's send a HTTP request to the machine which will activate the `attest_to_price_at_minute` which will fetch the price of the symbol we ask for at the time we ask for.
 
 
 ```sh
-curl -v -XPOST --data-binary '{"time" : "2023-04-16T12:30:00Z", "symbol" : ".BXBT"}' "${carol_url}/machines/${machine_id}/activate/attest_to_price_at_minute"
+curl -vG "${carol_url}/machines/${machine_id}/http/attest_to_price_at_minute" \
+-d time=2023-04-16T12:30:00Z \
+-d symbol=.BXBT
 ```
 
 which at the time of writing returns:
@@ -97,6 +152,22 @@ which at the time of writing returns:
   }
 }
 ```
+
+## Roadmap
+
+### 1. Stateless oracles
+
+The first milestone is to have carol functioning as a programmable BLS-based DLC oracle for the protocol described in *[Cryptographic Oracle-Based Conditional Payments]*.
+To do this it doesn't need state and it doesn't need to communicate with other carol nodes.
+
+### 2. TODO Local state
+
+At some point we want to allow programs to store state that they can access when they are re-activated as well as generate secret keys for `secp256k1`, `bls12_381`
+
+### 3. TODO Federated state
+
+Finally, we want programs to be able to store state on multiple carol nodes working as a federation. Secret keys would be Shamir secret shared across these nodes as well.
+
 
 
 [Cryptographic Oracle-Based Conditional Payments]: https://eprint.iacr.org/2022/499

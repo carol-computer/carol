@@ -1,10 +1,10 @@
 mod host_bindings;
 mod state;
-use carol_bls as bls;
 pub use state::*;
 
 use anyhow::Context;
 use carol_core::{hex, BinaryId, MachineId};
+pub use host_bindings::guest;
 use host_bindings::{Environment, Host, Machine};
 use std::fs::File;
 use std::io::Read;
@@ -16,6 +16,12 @@ use wasmtime::{Config, Engine, Store};
 #[derive(Clone)]
 pub struct Executor {
     engine: Engine,
+}
+
+impl Default for Executor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone)]
@@ -84,11 +90,40 @@ impl Executor {
         })
     }
 
+    pub async fn get_binary_api(
+        &self,
+        compiled_binary: &CompiledBinary,
+    ) -> anyhow::Result<host_bindings::guest::BinaryApi> {
+        let dummy_host = Host {
+            env: Environment::BinaryApi,
+            panic_message: None,
+        };
+
+        let mut linker = Linker::new(&self.engine);
+        Machine::add_to_linker(&mut linker, |state: &mut Host| state)?;
+
+        let mut store = Store::new(&self.engine, dummy_host);
+
+        let span = info_span!("describe_binary");
+
+        let (bindings, _) =
+            Machine::instantiate_async(&mut store, &compiled_binary.component, &linker).await?;
+
+        let output = bindings
+            .carol_machine_guest()
+            .call_get_binary_api(&mut store)
+            .instrument(span)
+            .await?;
+
+        Ok(output)
+    }
+
     pub async fn activate_machine(
         &self,
         state: State,
         compiled_binary: &CompiledBinary,
         machine_params: &[u8],
+        activation_name: &str,
         activation_input: &[u8],
     ) -> anyhow::Result<Result<Vec<u8>, GuestError>> {
         let machine_id = MachineId::new(compiled_binary.binary_id, machine_params);
@@ -106,11 +141,10 @@ impl Executor {
         let mut store = Store::new(
             &self.engine,
             Host {
-                machine_id,
-                state,
                 env: Environment::Activation {
-                    bls_keypair: bls::KeyPair::random(&mut rand::thread_rng()),
                     http_client: reqwest::Client::new(),
+                    machine_id,
+                    state,
                 },
                 panic_message: None,
             },
@@ -142,8 +176,13 @@ impl Executor {
         // // Here our `greet` function doesn't take any parameters for the component,
         // // but in the Wasmtime embedding API the first argument is always a `Store`.
         let output = bindings
-            .machine()
-            .call_activate(&mut store, machine_params, activation_input)
+            .carol_machine_guest()
+            .call_activate(
+                &mut store,
+                machine_params,
+                activation_name,
+                activation_input,
+            )
             .instrument(span)
             .await;
 
@@ -177,9 +216,7 @@ impl Executor {
         let mut store = Store::new(
             &self.engine,
             Host {
-                machine_id,
-                state,
-                env: Environment::Http,
+                env: Environment::Http { machine_id, state },
                 panic_message: None,
             },
         );
@@ -202,7 +239,7 @@ impl Executor {
             machine_id = machine_id.to_string()
         );
         let response = bindings
-            .machine()
+            .carol_machine_guest()
             .call_handle_http(
                 &mut store,
                 &host_bindings::http::Request {
@@ -246,11 +283,5 @@ impl Executor {
                 }
             })),
         }
-    }
-}
-
-impl Default for Executor {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -1,3 +1,4 @@
+use comrak::ComrakExtensionOptions;
 use maud::{html, PreEscaped, DOCTYPE};
 
 fn var(name: &str) -> Option<String> {
@@ -7,7 +8,16 @@ fn var(name: &str) -> Option<String> {
 }
 
 pub fn default_welcome(desc: Option<&str>, body: &str) -> String {
-    let desc_html = comrak::markdown_to_html(desc.unwrap_or(""), &comrak::ComrakOptions::default());
+    let desc_html = comrak::markdown_to_html(
+        desc.unwrap_or(""),
+        &comrak::ComrakOptions {
+            extension: ComrakExtensionOptions {
+                autolink: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
 
     html! {
         (DOCTYPE)
@@ -32,9 +42,17 @@ pub fn default_welcome(desc: Option<&str>, body: &str) -> String {
             }
 
             @if let Some(pkg_repo) = var("CARGO_PKG_REPOSITORY") {
-                h2.guest-repo {
+                h2.guest-prop {
                     "Repository: " a.guest-repo href={(pkg_repo)} {
                         (pkg_repo)
+                    }
+                }
+            }
+
+            @if let Some(pkg_homepage) = var("CARGO_PKG_HOMEPAGE") {
+                h2.guest-prop {
+                    "Homepage: " a.guest-repo href={(pkg_homepage)} {
+                        (pkg_homepage)
                     }
                 }
             }

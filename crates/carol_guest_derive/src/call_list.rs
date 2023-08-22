@@ -6,29 +6,33 @@ use syn::{
     ReturnType, Signature, Token,
 };
 
-use crate::activate::{Http, HttpMethod};
+use crate::activate::HttpMethod;
 use std::collections::BTreeMap;
 
-pub struct HttpCallList(BTreeMap<String, Endpoints>);
-
-struct Endpoint {
-    docs: Option<String>,
-    sig: syn::Signature,
+pub struct ActivationList {
+    http_endpoints: BTreeMap<String, Methods>,
+    methods: BTreeMap<String, Activation>,
 }
 
-pub struct Endpoints {
-    points: BTreeMap<HttpMethod, Endpoint>,
+struct Methods {
+    map: BTreeMap<HttpMethod, Activation>,
     default_span: Span,
 }
 
-pub struct Call {
+#[derive(Clone)]
+pub struct HttpEndpoint {
     pub path: LitStr,
-    pub http_opt: Http,
+    pub method: HttpMethod,
+}
+
+#[derive(Clone)]
+pub struct Activation {
+    pub http_endpoint: Option<HttpEndpoint>,
     pub sig: syn::Signature,
     pub docs: Option<String>,
 }
 
-fn html_doc_params(signature: &Signature) -> Vec<(String, String)> {
+fn doc_params(signature: &Signature) -> Vec<(String, String)> {
     let mut params = vec![];
     for fn_arg in &signature.inputs {
         match fn_arg {
@@ -48,38 +52,62 @@ fn html_doc_params(signature: &Signature) -> Vec<(String, String)> {
     params
 }
 
-impl HttpCallList {
+impl ActivationList {
     pub fn new() -> Self {
-        Self(Default::default())
+        Self {
+            http_endpoints: Default::default(),
+            methods: Default::default(),
+        }
     }
-    pub fn add_call(&mut self, call: Call) {
-        let endpoints = self
-            .0
-            .entry(call.path.value())
-            .or_insert_with(|| Endpoints {
-                points: Default::default(),
-                default_span: call.path.span(),
-            });
+    pub fn add_call(&mut self, activation: Activation) {
+        if let Some(http_endpoint) = &activation.http_endpoint {
+            let http_methods = self
+                .http_endpoints
+                .entry(http_endpoint.path.value())
+                .or_insert_with(|| Methods {
+                    map: Default::default(),
+                    default_span: http_endpoint.path.span(),
+                });
 
-        endpoints.points.insert(
-            call.http_opt.method,
-            Endpoint {
-                docs: call.docs,
-                sig: call.sig,
-            },
-        );
+            http_methods
+                .map
+                .insert(http_endpoint.method, activation.clone());
+        }
+
+        self.methods
+            .insert(activation.sig.ident.to_string(), activation);
+    }
+
+    pub fn binary_api(&self) -> syn::ExprStruct {
+        let activations = self
+            .methods
+            .iter()
+            .map(|(method_name, endpoint)| {
+                let method_name = method_name.to_string();
+                parse_quote_spanned! { endpoint.sig.span() =>
+                    carol_guest::bind::exports::carol::machine::guest::ActivationDescription {
+                        name: #method_name.into(),
+                    }
+                }
+            })
+            .collect::<Vec<syn::ExprStruct>>();
+        parse_quote! {
+            carol_guest::bind::exports::carol::machine::guest::BinaryApi {
+                activations: vec![ #(#activations),* ],
+            }
+        }
     }
 
     pub fn render(&self) -> String {
         html! {
-            @for (path, endpoints) in &self.0 {
-                @for (method, endpoint) in &endpoints.points {
+            @for (path, endpoints) in &self.http_endpoints {
+                @for (method, endpoint) in &endpoints.map {
                     @let desc_html = comrak::markdown_to_html(endpoint.docs.as_deref().unwrap_or(""), &comrak::ComrakOptions::default());
                     h2 { (method) " " (path) }
                     p { (PreEscaped(desc_html)) }
                     h3 { "Paramters" }
                     ol {
-                        @for (name, ty) in &html_doc_params(&endpoint.sig) {
+                        @for (name, ty) in &doc_params(&endpoint.sig) {
                             li { (name) ": " code { (ty) } }
                         }
                     }
@@ -88,15 +116,15 @@ impl HttpCallList {
         }.into_string()
     }
 
-    pub fn to_match_arms(&self, carol_mod: &Ident, enum_name: &Ident) -> Vec<Arm> {
+    pub fn to_match_arms(&self, carol_mod: &Ident) -> Vec<Arm> {
         let mut match_arms = vec![];
         let mut allowed: Vec<String> = vec![];
 
-        for (path, endpoints) in &self.0 {
+        for (path, endpoints) in &self.http_endpoints {
             let route_path = LitStr::new(path, endpoints.default_span);
             let mut inner_match_arms: Vec<Arm> = vec![];
 
-            for (method, endpoint) in &endpoints.points {
+            for (method, endpoint) in &endpoints.map {
                 let method_name = endpoint.sig.ident.clone();
                 let sig_span = method_name.span();
 
@@ -106,7 +134,6 @@ impl HttpCallList {
                 );
 
                 let struct_path: Path = parse_quote!(#carol_mod::#struct_name);
-                let variant_path: Path = parse_quote!(#carol_mod::#enum_name::#struct_name);
 
                 let route_method_ident = match method {
                     HttpMethod::Post => format_ident!("Post"),
@@ -140,19 +167,37 @@ impl HttpCallList {
                         let bincode_decode_output_expect = format!(
                             "#[activate] bincode decoding the output of {} to type {}",
                             method_name,
-                            ty.to_token_stream()
+                            ty.span()
+                                .source_text()
+                                .unwrap_or(ty.to_token_stream().to_string())
                         );
                         let json_encode_output_expect = format!(
                             "#[activate] JSON encoding the output of {} from type {}",
                             method_name,
-                            ty.to_token_stream()
+                            ty.span()
+                                .source_text()
+                                .unwrap_or(ty.to_token_stream().to_string())
                         );
 
+                        let encode_output = quote_spanned! { ty.span() => carol_guest::serde_json::to_vec_pretty(&__decoded_output).expect(#json_encode_output_expect)
+                        };
+
+                        if let syn::Type::Path(type_path) = &*ty {
+                            let last = type_path
+                                .path
+                                .segments
+                                .last()
+                                .map(|segment| segment.ident.to_string());
+                            if Some("Result".into()) == last {
+                                // TODO: Do something different with results so we map Result Err to HTTP status codes
+                            }
+                        }
+
                         quote_spanned! { ty.span() =>  {
-                            let (decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
-                            let json_encoded_output = carol_guest::serde_json::to_vec_pretty(&decoded_output).expect(#json_encode_output_expect);
+                            let (__decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
+                            let json_encoded_output = #encode_output;
                             http::Response {
-                                headers: vec![],
+                                headers: vec![("Content-Type".into(), "application/json".as_bytes().to_vec())],
                                 status: 200,
                                 body: json_encoded_output
                             }
@@ -163,6 +208,7 @@ impl HttpCallList {
                 let bincode_encode_error =
                     format!("#[activate] bincode encoding input to {}", method_name);
 
+                let method_name_str = method_name.to_string();
                 let arm_body = quote! {{
                     let method_struct = #decode_code;
                     let method_struct = match method_struct {
@@ -173,10 +219,10 @@ impl HttpCallList {
                             status: 400,
                         }
                     };
-                    let method_variant = #variant_path(method_struct);
 
-                    let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_variant, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
-                    let output = match carol_guest::machines::Cap::self_activate(&__ctx, &binary_input) {
+
+                    let binary_input: Vec<u8> = carol_guest::bincode::encode_to_vec(&method_struct, carol_guest::bincode::config::standard()).expect(#bincode_encode_error);
+                    let output = match carol_guest::machines::Cap::self_activate(&__ctx, #method_name_str, &binary_input) {
                         Ok(output) => output,
                         Err(e) => return http::Response {
                             headers: vec![],

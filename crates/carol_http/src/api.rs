@@ -1,9 +1,16 @@
+use alloc::{collections::BTreeMap, string::String};
 use carol_core::{serde, BinaryId, MachineId};
 use hyper::{header, http::HeaderValue, HeaderMap, StatusCode};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BinaryCreated {
     pub id: BinaryId,
+}
+
+impl BinaryCreated {
+    pub fn location(&self) -> String {
+        format!("/binaries/{}", self.id)
+    }
 }
 
 pub trait Response: serde::Serialize {
@@ -21,7 +28,7 @@ impl Response for BinaryCreated {
     fn set_headers(&self, headers: &mut HeaderMap) {
         headers.insert(
             header::LOCATION,
-            HeaderValue::from_str(&format!("/binaries/{}", self.id)).unwrap(),
+            HeaderValue::from_str(&self.location()).unwrap(),
         );
     }
 }
@@ -51,3 +58,16 @@ pub struct GetMachine<'a> {
 }
 
 impl<'a> Response for GetMachine<'a> {}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct BinaryDescription {
+    pub activations: BTreeMap<String, AcivationDescription>,
+}
+
+impl Response for BinaryDescription {}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct AcivationDescription {
+    // I am sure this will map to some kind of metadata in the future
+    //empty for now
+}

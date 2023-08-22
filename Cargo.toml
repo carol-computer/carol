@@ -2,7 +2,7 @@
 
 members = [
     "example-guests/hello_world",
-    "example-guests/bitmex",
+    "example-guests/bitmex_oracle",
     "crates/carol_guest",
     "crates/carol_host",
     "crates/carol_guest_derive",
@@ -37,6 +37,7 @@ clap = {  version = "4", features = ["derive"] }
 anyhow = "1"
 futures-core = "0.3"
 tracing = "0.1"
+tracing-subscriber = "0.3"
 lazy_static = "1"
 sha2 = { version = "0.9", default-features = false }
 rand_core = "0.6"

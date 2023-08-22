@@ -11,7 +11,7 @@ pub use serde_urlencoded;
 pub mod bind {
     wit_bindgen::generate!({
         world: "machine",
-        path: "../../wit/v0.1.0",
+        path: "../../wit/",
         macro_export,
         export_macro_name: "set_machine",
         macro_call_prefix: "carol_guest::bind::",

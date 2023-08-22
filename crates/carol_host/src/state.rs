@@ -6,19 +6,32 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct State {
-    executor: Arc<Executor>,
-    binaries: Arc<Mutex<HashMap<BinaryId, Arc<CompiledBinary>>>>,
-    machines: Arc<Mutex<HashMap<MachineId, (BinaryId, Arc<Vec<u8>>)>>>,
-    bls_keypair: bls::KeyPair,
+    pub bls_keypair: bls::KeyPair,
+    pub exec: ExecutorState,
 }
 
 impl State {
-    pub fn new(executor: Executor, bls_keypair: bls::KeyPair) -> Self {
+    pub fn new(bls_keypair: bls::KeyPair) -> Self {
         Self {
-            executor: Arc::new(executor),
+            bls_keypair,
+            exec: ExecutorState::default(),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ExecutorState {
+    executor: Executor,
+    binaries: Arc<Mutex<HashMap<BinaryId, Arc<CompiledBinary>>>>,
+    machines: Arc<Mutex<HashMap<MachineId, (BinaryId, Arc<Vec<u8>>)>>>,
+}
+
+impl ExecutorState {
+    pub fn new(executor: Executor) -> Self {
+        Self {
+            executor,
             binaries: Default::default(),
             machines: Default::default(),
-            bls_keypair,
         }
     }
 
@@ -50,9 +63,5 @@ impl State {
 
     pub fn executor(&self) -> &Executor {
         &self.executor
-    }
-
-    pub fn bls_keypair(&self) -> bls::KeyPair {
-        self.bls_keypair
     }
 }

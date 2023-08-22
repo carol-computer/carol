@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use carol::config::Config;
-use carol_host::{Executor, State};
+use carol_host::State;
 use clap::{Parser, Subcommand};
 use std::{fs::File, path::PathBuf};
 use tracing::{event, Level};
@@ -54,9 +54,13 @@ pub async fn main() -> anyhow::Result<()> {
             tracing::subscriber::set_global_default(subscriber)?;
             event!(Level::INFO, "starting carol");
 
-            let state = State::new(Executor::default(), config.bls_secret_key);
+            let state = State::new(config.bls_secret_key);
 
-            carol::http::server::start(config.http_server, state).await?;
+            let (local_addr, server) = carol::http::server::start(config.http_server, state)?;
+
+            event!(Level::INFO, "bound HTTP server to {}", local_addr);
+
+            server.await;
         }
         Commands::ConfigGen => {
             if file_path.exists() {

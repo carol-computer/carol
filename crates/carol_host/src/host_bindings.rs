@@ -1,4 +1,4 @@
-use crate::State;
+use crate::{ExecutorState, State};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use carol_bls as bls;
@@ -9,39 +9,71 @@ use wasmtime::component::bindgen;
 
 bindgen!({
     world: "machine",
-    path: "../../wit/v0.1.0",
+    path: "../../wit/",
     tracing: true,
     async: true,
 });
 
+pub use exports::carol::machine::guest;
+
 pub struct Host {
-    pub machine_id: MachineId,
-    pub state: State,
     pub env: Environment,
     pub panic_message: Option<String>,
 }
+
 pub enum Environment {
     Activation {
-        bls_keypair: bls::KeyPair,
+        machine_id: MachineId,
         http_client: reqwest::Client,
+        state: State,
     },
-    Http,
+    Http {
+        machine_id: MachineId,
+        state: State,
+    },
+    BinaryApi,
 }
 
 impl Environment {
-    pub fn http_client(&self) -> &reqwest::Client {
+    pub fn machine_id(&self) -> anyhow::Result<MachineId> {
         match self {
-            Environment::Activation { http_client, .. } => http_client,
-            Environment::Http { .. } => {
-                panic!("cannot use http client in http handler environment")
+            Environment::Activation { machine_id, .. } | Environment::Http { machine_id, .. } => {
+                Ok(*machine_id)
             }
+            Environment::BinaryApi => Err(anyhow!("No machine in this environment")),
+        }
+    }
+    pub fn http_client(&self) -> anyhow::Result<&reqwest::Client> {
+        match self {
+            Environment::Activation { http_client, .. } => Ok(http_client),
+            _ => Err(anyhow!(
+                "cannot use http client in http handler environment"
+            )),
         }
     }
 
-    pub fn bls_keypair(&self) -> &bls::KeyPair {
+    pub fn bls_keypair(&self) -> anyhow::Result<bls::KeyPair> {
         match self {
-            Environment::Activation { bls_keypair, .. } => bls_keypair,
-            Environment::Http { .. } => panic!("cannot access BLS key in http handler environment"),
+            Environment::Activation { state, .. } => Ok(state.bls_keypair),
+            _ => Err(anyhow!("cannot access BLS key in http handler environment")),
+        }
+    }
+
+    pub fn executor_state(&self) -> anyhow::Result<ExecutorState> {
+        match self {
+            Environment::Activation { state, .. } | Environment::Http { state, .. } => {
+                Ok(state.exec.clone())
+            }
+            _ => Err(anyhow!("cannot activate machines in this environment")),
+        }
+    }
+
+    pub fn global_state(&self) -> anyhow::Result<State> {
+        match self {
+            Environment::Activation { state, .. } | Environment::Http { state, .. } => {
+                Ok(state.clone())
+            }
+            _ => Err(anyhow!("cannot activate machines in this environment")),
         }
     }
 }
@@ -54,7 +86,7 @@ impl http::Host for Host {
         &mut self,
         request: http::Request,
     ) -> anyhow::Result<Result<http::Response, http::Error>> {
-        let client = self.env.http_client();
+        let client = self.env.http_client()?;
         let inner_result = (|| async {
             let request: reqwest::Request = request.try_into()?;
             let res = client.execute(request).await?;
@@ -78,12 +110,12 @@ impl http::Host for Host {
 #[async_trait]
 impl global::Host for Host {
     async fn bls_static_pubkey(&mut self) -> anyhow::Result<Vec<u8>> {
-        Ok(self.env.bls_keypair().public_key().to_bytes().to_vec())
+        Ok(self.env.bls_keypair()?.public_key().to_bytes().to_vec())
     }
 
     async fn bls_static_sign(&mut self, message: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         Ok(
-            carol_bls::sign(self.state.bls_keypair(), self.machine_id, &message)
+            carol_bls::sign(self.env.bls_keypair()?, self.env.machine_id()?, &message)
                 .0
                 .to_uncompressed()
                 .to_vec(),
@@ -109,23 +141,24 @@ impl log::Host for Host {
 impl machines::Host for Host {
     async fn self_activate(
         &mut self,
+        method_name: String,
         input: Vec<u8>,
     ) -> anyhow::Result<Result<Vec<u8>, machines::Error>> {
-        let (binary_id, params) = self
-            .state
-            .get_machine(self.machine_id)
+        let exec_state = self.env.executor_state()?;
+        let machine_id = self.env.machine_id()?;
+        let (binary_id, params) = exec_state
+            .get_machine(self.env.machine_id()?)
             .expect("must exist since we are running it!");
-        let compiled_binary = self
-            .state
+        let compiled_binary = exec_state
             .get_binary(binary_id)
             .expect("must exist since we are running it!");
-        match self
-            .state
+        match exec_state
             .executor()
             .activate_machine(
-                self.state.clone(),
+                self.env.global_state()?,
                 compiled_binary.as_ref(),
                 params.as_ref(),
+                &method_name,
                 &input,
             )
             .await
@@ -139,7 +172,7 @@ impl machines::Host for Host {
                 );
                 Ok(Err(machines::Error::Panic(machines::PanicInfo {
                     reason: e.to_string(),
-                    machine: self.machine_id.to_bytes().to_vec(),
+                    machine: machine_id.to_bytes().to_vec(),
                 })))
             }
             Err(e) => {
