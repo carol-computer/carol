@@ -2,6 +2,7 @@
 extern crate alloc;
 
 pub use bincode;
+pub use carol_core;
 pub use carol_guest_derive::{activate, codec, machine};
 pub use serde;
 pub use serde_json;
@@ -19,9 +20,11 @@ pub mod bind {
 }
 
 pub mod bls;
+mod client;
 pub mod http;
 pub mod log;
 pub mod machines;
+pub use client::*;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;

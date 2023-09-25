@@ -18,7 +18,7 @@ pub mod hex;
 mod macros;
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Default)]
 pub struct MachineId([u8; 32]);
 
 impl MachineId {
@@ -30,7 +30,7 @@ impl MachineId {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Default)]
 pub struct BinaryId([u8; 32]);
 
 impl BinaryId {
