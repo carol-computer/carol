@@ -47,7 +47,7 @@ fn post_request() {
     let _response = Foo::handle_http(http::Request {
         method: http::Method::Post,
         uri: "/post_add".into(),
-        body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
+        body: br#"{"lhs": 3, "rhs": 4}"#.to_vec(),
         headers: vec![],
     });
 }
@@ -80,7 +80,7 @@ fn custom_path_post() {
     Foo::handle_http(http::Request {
         method: http::Method::Post,
         uri: "/other/path".into(),
-        body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
+        body: br#"{"lhs": 3, "rhs": 4}"#.to_vec(),
         headers: vec![],
     });
 }
@@ -90,7 +90,7 @@ fn post_request_invalid_params() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Post,
         uri: "/post_add".into(),
-        body: r#"{"lhs": 3, "rhs": "foo"}"#.as_bytes().to_vec(),
+        body: br#"{"lhs": 3, "rhs": "foo"}"#.to_vec(),
         headers: vec![],
     });
 
@@ -114,7 +114,7 @@ fn method_not_allowed() {
     let response = Foo::handle_http(http::Request {
         method: http::Method::Post,
         uri: "/get_add".into(),
-        body: r#"{"lhs": 3, "rhs": 4}"#.as_bytes().to_vec(),
+        body: br#"{"lhs": 3, "rhs": 4}"#.to_vec(),
         headers: vec![],
     });
 

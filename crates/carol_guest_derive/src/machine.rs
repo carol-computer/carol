@@ -210,7 +210,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 format!("#[machine] bincode encoding output of {method_name}");
             let method_name_str = method_name.to_string();
             match_arms.push(parse_quote_spanned! { sig_span => #method_name_str => {
-                let (__method_input, _) = bincode::decode_from_slice::<#struct_path, _>(&__input, bincode::config::standard()).expect(#input_decode_expect);
+                let (__method_input, _) = carol_guest::bincode::decode_from_slice::<#struct_path, _>(&__input, carol_guest::bincode::config::standard()).expect(#input_decode_expect);
                 #[allow(clippy::let_unit_value)]
                 let __output = #activate_call;
                 carol_guest::bincode::encode_to_vec(__output, carol_guest::bincode::config::standard()).expect(#encode_output_expect)
@@ -249,7 +249,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 let call_struct = #call_struct;
                 let encoded_input = carol_guest::bincode::encode_to_vec(&call_struct, carol_guest::bincode::config::standard())?;
                 let encoded_output = self.client.activate(self.machine_id, #method_name_str, &encoded_input)?;
-                let (decoded_output,_) = bincode::decode_from_slice(&encoded_output, carol_guest::bincode::config::standard())?;
+                let (decoded_output,_) = carol_guest::bincode::decode_from_slice(&encoded_output, carol_guest::bincode::config::standard())?;
                 Ok(decoded_output)
             }};
 
@@ -279,12 +279,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         http_match_arms.push(parse_quote! { "/" => {
             match __method {
                 carol_guest::http::Method::Get => http::Response {
-                    headers: vec![("Content-Type".into(), "text/html".as_bytes().to_vec())],
+                    headers: vec![("Content-Type".into(), b"text/html".to_vec())],
                     body: #welcome_literal.to_vec(),
                     status: 200,
                 },
                 _ => http::Response {
-                    headers: vec![("Allow".to_string(), "GET".as_bytes().to_vec())],
+                    headers: vec![("Allow".to_string(), b"GET".to_vec())],
                     body: vec![],
                     status: 405,
                 }
