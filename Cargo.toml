@@ -1,5 +1,7 @@
 [workspace]
 
+resolver = "2"
+
 members = [
     "example-guests/hello_world",
     "example-guests/bitmex_oracle",

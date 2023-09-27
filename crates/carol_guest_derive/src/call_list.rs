@@ -1,5 +1,5 @@
 use maud::{html, PreEscaped};
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Literal, Span};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse_quote, parse_quote_spanned, spanned::Spanned, token, Arm, Expr, ExprMatch, LitStr, Path,
@@ -139,6 +139,7 @@ impl ActivationList {
                     HttpMethod::Post => format_ident!("Post"),
                     HttpMethod::Get => format_ident!("Get"),
                 };
+                let route_method_str = method.to_string();
 
                 allowed.push(method.to_string());
 
@@ -197,7 +198,7 @@ impl ActivationList {
                             let (__decoded_output, _) : (#ty, _) = carol_guest::bincode::decode_from_slice(&output, carol_guest::bincode::config::standard()).expect(#bincode_decode_output_expect);
                             let json_encoded_output = #encode_output;
                             http::Response {
-                                headers: vec![("Content-Type".into(), "application/json".as_bytes().to_vec())],
+                                headers: vec![("Content-Type".into(), b"application/json".to_vec())],
                                 status: 200,
                                 body: json_encoded_output
                             }
@@ -226,7 +227,7 @@ impl ActivationList {
                         Ok(output) => output,
                         Err(e) => return http::Response {
                             headers: vec![],
-                            body: format!("HTTP handler failed to self-activate via {}, {}: {}", stringify!(#route_method_ident), #route_path, e).as_bytes().to_vec(),
+                            body: format!("HTTP handler failed to self-activate via {}, {}: {}", #route_method_str, #route_path, e).as_bytes().to_vec(),
                             status: 500,
                         }
                     };
@@ -237,10 +238,10 @@ impl ActivationList {
                 inner_match_arms.push(parse_quote_spanned!{sig_span => carol_guest::http::Method::#route_method_ident => #arm_body });
             }
 
-            let allowed_str = allowed.join(", ");
+            let allowed_str = Literal::byte_string(allowed.join(", ").as_bytes());
             inner_match_arms.push(parse_quote_spanned! { endpoints.default_span => _ => {
                 http::Response {
-                    headers: vec![("Allow".into(), #allowed_str.as_bytes().to_vec())],
+                    headers: vec![("Allow".into(), #allowed_str.to_vec())],
                     body: vec![],
                     status: 405,
                 }

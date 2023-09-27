@@ -5,8 +5,8 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{self, Brace},
-    Arm, Attribute, Expr, ExprMatch, ExprMethodCall, Field, Fields, FieldsNamed, Generics,
-    ImplItem, ItemStruct, LitStr, Path, Token, VisPublic,
+    Arm, Attribute, Expr, ExprMatch, ExprMethodCall, ExprStruct, Field, FieldValue, Fields,
+    FieldsNamed, Generics, ImplItem, ItemStruct, LitStr, Member, Path, Token, VisPublic,
 };
 
 use crate::call_list::HttpEndpoint;
@@ -23,9 +23,11 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let mut match_arms: Vec<Arm> = vec![];
     let mut method_structs = vec![];
     let mut call_list = crate::call_list::ActivationList::new();
+    let mut client_methods = vec![];
 
     for item in &mut input.items {
         if let ImplItem::Method(method) = item {
+            let mut client_method = method.clone();
             let activate_attr = match method
                 .attrs
                 .iter()
@@ -59,19 +61,30 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 named: Punctuated::default(),
             };
 
-            let mut inputs = method.sig.inputs.iter_mut().peekable();
+            let mut client_call_fields = Punctuated::new();
+
+            let mut inputs = method.sig.inputs.iter_mut().enumerate().peekable();
             let mut _has_receiver = false; //TODO use this to only pass in receiver if it's there
-            if let Some(syn::FnArg::Receiver(_)) = inputs.peek() {
+            if let Some((_, syn::FnArg::Receiver(_))) = inputs.peek() {
                 _has_receiver = true;
                 let _ = inputs.next();
             } else {
                 return quote_spanned!(sig_span => compile_error!("the first argument to an #[activate] method must be &self"));
             }
 
-            if let Some(syn::FnArg::Typed(fn_arg)) = inputs.peek() {
+            if let Some((index_of_cap, syn::FnArg::Typed(fn_arg))) = inputs.peek() {
                 if let arg @ syn::Pat::Ident(pat_ident) = &*fn_arg.pat {
                     let ident = pat_ident.ident.to_string();
                     if ident == "cap" || ident == "_cap" {
+                        client_method.sig.inputs = client_method
+                            .sig
+                            .inputs
+                            .clone()
+                            .into_iter()
+                            .enumerate()
+                            .filter(|(i, _)| i != index_of_cap)
+                            .map(|(_, input)| input)
+                            .collect();
                         let _ = inputs.next();
                     } else {
                         return quote_spanned!(arg.span() => compile_error!("the second argument after `&self` to an #[activate] method must be `cap`"));
@@ -81,7 +94,7 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
             let mut http_doc_params: Vec<(String, String)> = vec![];
             let mut activate_call_args = Punctuated::new();
             activate_call_args.push(parse_quote! { &__ctx });
-            for fn_arg in inputs {
+            for (_, fn_arg) in inputs {
                 let span = fn_arg.span();
                 match fn_arg {
                     syn::FnArg::Typed(fn_arg) => match fn_arg.pat.as_mut() {
@@ -117,6 +130,14 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                                 ident: Some(pat_ident.ident.clone()),
                                 colon_token: Some(fn_arg.colon_token),
                                 ty: *fn_arg.ty.clone(),
+                            });
+
+                            let ident = &pat_ident.ident;
+                            client_call_fields.push(FieldValue {
+                                attrs: vec![],
+                                member: Member::Named(pat_ident.ident.clone()),
+                                colon_token: Some(fn_arg.colon_token),
+                                expr: parse_quote_spanned! { pat_ident.span() => #ident },
                             });
 
                             activate_call_args.push(parse_quote_spanned! { fn_arg.span() => __method_input.#fn_arg_ident });
@@ -189,11 +210,50 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
                 format!("#[machine] bincode encoding output of {method_name}");
             let method_name_str = method_name.to_string();
             match_arms.push(parse_quote_spanned! { sig_span => #method_name_str => {
-                let (__method_input, _) = bincode::decode_from_slice::<#struct_path, _>(&__input, bincode::config::standard()).expect(#input_decode_expect);
+                let (__method_input, _) = carol_guest::bincode::decode_from_slice::<#struct_path, _>(&__input, carol_guest::bincode::config::standard()).expect(#input_decode_expect);
                 #[allow(clippy::let_unit_value)]
                 let __output = #activate_call;
                 carol_guest::bincode::encode_to_vec(__output, carol_guest::bincode::config::standard()).expect(#encode_output_expect)
             }});
+
+            let output_span = client_method.sig.output.span();
+            client_method.sig.output = match client_method.sig.output {
+                syn::ReturnType::Default => {
+                    parse_quote_spanned! { output_span => -> Result<(), C::Error> }
+                }
+                syn::ReturnType::Type(_, ty) => {
+                    parse_quote_spanned! { output_span => -> Result<#ty, C::Error> }
+                }
+            };
+            for param in client_method.sig.inputs.iter_mut() {
+                let attrs = match param {
+                    syn::FnArg::Typed(param) => &mut param.attrs,
+                    syn::FnArg::Receiver(recv) => &mut recv.attrs,
+                };
+                attrs.retain(|attr| {
+                    attr.path.get_ident().map(|ident| ident.to_string())
+                        != Some("with_serde".into())
+                })
+            }
+
+            let call_struct = ExprStruct {
+                attrs: vec![],
+                path: parse_quote_spanned! { sig_span => super::#struct_path },
+                brace_token: token::Brace::default(),
+                fields: client_call_fields,
+                dot2_token: None,
+                rest: None,
+            };
+
+            client_method.block = parse_quote_spanned! {sig_span => {
+                let call_struct = #call_struct;
+                let encoded_input = carol_guest::bincode::encode_to_vec(&call_struct, carol_guest::bincode::config::standard())?;
+                let encoded_output = self.client.activate(self.machine_id, #method_name_str, &encoded_input)?;
+                let (decoded_output,_) = carol_guest::bincode::decode_from_slice(&encoded_output, carol_guest::bincode::config::standard())?;
+                Ok(decoded_output)
+            }};
+
+            client_methods.push(client_method);
         }
     }
 
@@ -219,12 +279,12 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         http_match_arms.push(parse_quote! { "/" => {
             match __method {
                 carol_guest::http::Method::Get => http::Response {
-                    headers: vec![("Content-Type".into(), "text/html".as_bytes().to_vec())],
+                    headers: vec![("Content-Type".into(), b"text/html".to_vec())],
                     body: #welcome_literal.to_vec(),
                     status: 200,
                 },
                 _ => http::Response {
-                    headers: vec![("Allow".to_string(), "GET".as_bytes().to_vec())],
+                    headers: vec![("Allow".to_string(), b"GET".to_vec())],
                     body: vec![],
                     status: 405,
                 }
@@ -257,16 +317,28 @@ pub fn machine(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let binary_api = call_list.binary_api();
 
     let output = quote! {
+        #input
 
         pub mod #carol_mod {
             use super::*;
             #(#method_structs)*
         }
 
+        pub mod client {
+            use super::*;
+            pub struct Client<C> {
+                pub client: C,
+                pub machine_id: carol_guest::carol_core::MachineId,
+            }
+
+            impl<C: carol_guest::Client> Client<C> {
+                 #(#client_methods)*
+            }
+        }
+
         #[cfg(not(test))]
         carol_guest::set_machine!(#self_ty);
 
-        #input
 
         mod __machine_impl {
             use super::*;
