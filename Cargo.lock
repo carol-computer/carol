@@ -395,6 +395,7 @@ dependencies = [
 name = "carol_http"
 version = "0.1.0"
 dependencies = [
+ "carol_bls",
  "carol_core",
  "hyper",
  "serde",
