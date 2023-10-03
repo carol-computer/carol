@@ -3,6 +3,13 @@ use carol_core::{serde, BinaryId, MachineId};
 use hyper::{header, http::HeaderValue, HeaderMap, StatusCode};
 
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct Root {
+    pub static_public_key: carol_bls::PublicKey,
+}
+
+impl Response for Root {}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BinaryCreated {
     pub id: BinaryId,
 }

@@ -143,9 +143,9 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
         segments.collect::<Vec<_>>()
     };
     match (req.method(), &segments[..]) {
-        (&Method::GET, [""]) | (&Method::GET, ["index.html"]) => Ok(Response::new(Body::from(
-            b"<html><body><h1> THIS IS A CAROL NODE </h1><p> In the future you will be able to configure this page.</p></body></html>".to_vec(),
-        ))),
+        (&Method::GET, [""]) => Ok(build_response(&Root {
+            static_public_key: state.bls_keypair.public_key(),
+        })),
         (&Method::POST, ["binaries"]) => {
             let body = slurp_request_body(&mut req).await?;
             let binary_id = BinaryId::new(&body);
@@ -191,11 +191,21 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
 
             match method {
                 &Method::GET => {
-                    let carol_host::guest::BinaryApi {
-                        activations
-                    } = state.exec.executor().get_binary_api(&binary).await.map_err(|e| Problem::bad_request("failed to retrieve API from binary", e))?;
-                    let response =  build_response(&carol_http::api::BinaryDescription {
-                        activations: activations.into_iter().map(|carol_host::guest::ActivationDescription { name }| (name, carol_http::api::AcivationDescription {})).collect()
+                    let carol_host::guest::BinaryApi { activations } = state
+                        .exec
+                        .executor()
+                        .get_binary_api(&binary)
+                        .await
+                        .map_err(|e| {
+                            Problem::bad_request("failed to retrieve API from binary", e)
+                        })?;
+                    let response = build_response(&carol_http::api::BinaryDescription {
+                        activations: activations
+                            .into_iter()
+                            .map(|carol_host::guest::ActivationDescription { name }| {
+                                (name, carol_http::api::AcivationDescription {})
+                            })
+                            .collect(),
                     });
                     Ok(response)
                 }
@@ -227,32 +237,32 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                 .map_err(|e| Problem::invalid_path_element::<MachineId>(e.into(), machine_id))?;
             let (binary_id, params, compiled_binary) = {
                 let (binary_id, params) = state
-                    .exec.get_machine(machine_id)
+                    .exec
+                    .get_machine(machine_id)
                     .ok_or(Problem::not_found(path))?;
                 let compiled_binary = state
-                    .exec.get_binary(binary_id)
+                    .exec
+                    .get_binary(binary_id)
                     .ok_or(Problem::not_found(path))?;
                 (binary_id, params, compiled_binary)
             };
 
             match trailing {
-                &[] => {
-                    match method {
-                        &Method::GET => Ok(build_response(&GetMachine {
-                            binary_id,
-                            params: params.as_ref(),
-                        })),
-                        _ => Err(Problem::method_not_allowed(
-                            path,
-                            method.as_str(),
-                            &["GET"],
-                        ))
-                    }
+                &[] => match method {
+                    &Method::GET => Ok(build_response(&GetMachine {
+                        binary_id,
+                        params: params.as_ref(),
+                    })),
+                    _ => Err(Problem::method_not_allowed(path, method.as_str(), &["GET"])),
                 },
                 ["http", inner_path @ ..] => {
                     // we need to direct /http to /http/ so relative urls work in the machine
                     if inner_path.is_empty() && !req.uri().path().ends_with('/') {
-                        return Ok(Response::builder().header(header::LOCATION, "http/").status(StatusCode::PERMANENT_REDIRECT).body(Body::empty()).unwrap())
+                        return Ok(Response::builder()
+                            .header(header::LOCATION, "http/")
+                            .status(StatusCode::PERMANENT_REDIRECT)
+                            .body(Body::empty())
+                            .unwrap());
                     }
                     let transformed_uri = {
                         let mut parts = req.uri().clone().into_parts();
@@ -263,7 +273,9 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                             }
                         }
                         let new_paq = PathAndQuery::from_str(&new_paq)
-                            .with_context(|| format!("trying to turn {new_paq} into a path and query"))
+                            .with_context(|| {
+                                format!("trying to turn {new_paq} into a path and query")
+                            })
                             .map_err(Problem::internal_server_error)?;
                         parts.path_and_query = Some(new_paq);
                         Uri::from_parts(parts)
@@ -285,7 +297,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                         .map_err(Problem::guest_error)?;
 
                     Ok(output)
-                },
+                }
                 ["activate", activation_name] => {
                     let activation_name = activation_name.to_string();
                     match method {
@@ -304,7 +316,10 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                                 .await
                                 .map_err(|e| {
                                     Problem::new(
-                                        format!("error occurred while trying to activate machine: {}", e),
+                                        format!(
+                                            "error occurred while trying to activate machine: {}",
+                                            e
+                                        ),
                                         e,
                                         StatusCode::INTERNAL_SERVER_ERROR,
                                     )
@@ -324,7 +339,7 @@ pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<B
                             &["POST"],
                         )),
                     }
-                },
+                }
                 _ => Err(Problem::not_found(path)),
             }
         }

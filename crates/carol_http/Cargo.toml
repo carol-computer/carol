@@ -9,6 +9,7 @@ edition = "2021"
 carol_core.workspace = true
 serde.workspace = true
 hyper.workspace = true
+carol_bls.workspace = true
 
 [features]
 default = [ "std" ]
