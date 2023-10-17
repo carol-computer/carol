@@ -29,10 +29,6 @@
                 channel = "stable";
               } // rustupToolchainToml));
 
-              rustToolchain-beta = (super.rust-bin.fromRustupToolchain ({
-                channel = "beta";
-              } // rustupToolchainToml));
-
               rustToolchain-nightly = (super.rust-bin.fromRustupToolchain ({
                 channel = "nightly";
               } // rustupToolchainToml));
@@ -48,7 +44,6 @@
           src = pkgs.lib.cleanSourceWith {
             src = craneLib.path ./.;
             filter = path: type:
-              (pkgs.lib.hasInfix "/resources/" path) ||
               (pkgs.lib.hasSuffix "\.wit" path) ||
               (craneLib.filterCargoSources path type);
           };
@@ -205,12 +200,6 @@
             stable = mkShell {
               buildInputs = [
                 (rustToolchain.override {extensions = devShellToolchainExtensions;})
-              ] ++ devShellPackages;
-            };
-
-            beta = mkShell {
-              buildInputs = [
-                (rustToolchain-beta.override {extensions = devShellToolchainExtensions;})
               ] ++ devShellPackages;
             };
 
