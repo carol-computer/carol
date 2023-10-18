@@ -115,7 +115,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn sign_verify(sk in any::<[u8;64]>(), message in any::<[u8;32]>(), machine_id in any::<[u8;31]>()) {
+        fn sign_verify(sk in any::<[u8;64]>(), message in any::<[u8;32]>(), machine_id in any::<[u8;32]>()) {
             let sk = Scalar::from_bytes_wide(&sk);
             let kp = KeyPair::new(sk);
             let machine_id = MachineId::from_bytes(machine_id);

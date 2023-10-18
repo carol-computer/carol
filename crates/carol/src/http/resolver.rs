@@ -11,7 +11,6 @@ use hyper::http::HeaderValue;
 #[derive(Clone)]
 pub struct Resolver {
     inner: TokioAsyncResolver,
-    api_host: Option<Name>,
     base_domain: Option<Name>,
 }
 
@@ -22,16 +21,19 @@ pub enum Resolution {
 }
 
 impl Resolver {
+    pub fn base_domain(&self) -> Option<&Name> {
+        self.base_domain.as_ref()
+    }
+
     pub fn new(config: crate::config::dns::Config) -> Self {
         Self {
             inner: TokioAsyncResolver::tokio(config.hickory_conf, config.hickory_opts),
-            api_host: config.api_host,
             base_domain: config.base_domain,
         }
     }
 
     pub async fn resolve_host(&self, host_header: &HeaderValue) -> anyhow::Result<Resolution> {
-        if self.api_host.is_none() {
+        if self.base_domain.is_none() {
             return Ok(Resolution::Api);
         }
 
@@ -51,7 +53,7 @@ impl Resolver {
             Err(_) => return Ok(Resolution::Unknown),
         };
 
-        if Some(&host) == self.api_host.as_ref() {
+        if Some(&host) == self.base_domain.as_ref() {
             return Ok(Resolution::Api);
         }
 
@@ -82,7 +84,7 @@ impl Resolver {
         let mut labels = name.iter();
         let first = labels.next().unwrap_or(&[]);
         let first = String::from_utf8(first.to_vec()).ok()?;
-        let machine_id = MachineId::from_str(&first).ok()?;
+        let machine_id = carol_http::parse_host_header_label_for_machine(&first)?;
         let base_domain = Name::from_labels(labels).ok()?;
 
         if self.base_domain == Some(base_domain) {

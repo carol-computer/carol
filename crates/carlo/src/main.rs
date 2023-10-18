@@ -5,7 +5,10 @@ use carol_core::{BinaryId, MachineId};
 use carol_host::{CompiledBinary, Executor};
 use clap::{Args, Parser, Subcommand};
 use clap_cargo::Workspace;
-use std::process::{Command, Stdio};
+use std::{
+    process::{Command, Stdio},
+    str::FromStr,
+};
 use wit_component::ComponentEncoder;
 
 mod client;
@@ -42,9 +45,12 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", machine_id);
             } else {
                 println!(
-                    "{}",
+                    "url: {}",
                     server_opt.url_for(&format!("/machines/{}", machine_id))
                 );
+                if let Some(cname) = server_opt.cname_for_machine(machine_id) {
+                    println!("cname domain: {}", cname);
+                }
             }
         }
         Commands::Api(opts) => {
@@ -143,7 +149,7 @@ struct CreateOpts {
 #[derive(Args, Debug, Clone)]
 struct ServerOpts {
     #[arg(long)] // , default_value = "http://localhost:8000")] ?
-    carol_url: String,
+    carol_url: reqwest::Url,
 }
 
 impl ServerOpts {
@@ -151,8 +157,21 @@ impl ServerOpts {
         Client::new(self.carol_url.clone())
     }
 
-    pub fn url_for(&self, path: &str) -> String {
-        format!("{}{}", self.carol_url, path)
+    pub fn cname_for_machine(&self, id: MachineId) -> Option<String> {
+        let host = self.carol_url.host()?;
+        if let url::Host::Domain(domain) = host {
+            Some(format!(
+                "{}.{}",
+                carol_http::host_header_label_for_machine(id),
+                domain
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn url_for(&self, path: &str) -> reqwest::Url {
+        self.carol_url.join(path).expect("path is valid")
     }
 }
 
@@ -375,7 +394,8 @@ impl RunOpts {
             .expect("should be able to start HTTP server");
         let handle = rt.spawn(server);
         let server_opts = ServerOpts {
-            carol_url: format!("http://{bound_addr}"),
+            carol_url: reqwest::Url::from_str(&format!("http://{bound_addr}"))
+                .expect("this should be valid"),
         };
         let client = server_opts.new_client();
 

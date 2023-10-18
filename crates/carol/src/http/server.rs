@@ -298,6 +298,7 @@ impl Handler {
         match (req.method(), &segments[..]) {
             (&Method::GET, [""]) => Ok(build_response(&Root {
                 static_public_key: state.bls_keypair.public_key(),
+                base_domain: self.resolver.base_domain().map(ToString::to_string),
             })),
             (&Method::POST, ["binaries"]) => {
                 let body = slurp_request_body(&mut req).await?;

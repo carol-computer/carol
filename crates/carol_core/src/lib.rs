@@ -19,7 +19,7 @@ mod macros;
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Default)]
-pub struct MachineId([u8; 31]);
+pub struct MachineId([u8; 32]);
 
 impl MachineId {
     pub fn new(binary_id: BinaryId, params: &[u8]) -> Self {
@@ -27,8 +27,8 @@ impl MachineId {
         hash.update(binary_id.as_ref());
         hash.update(params);
         let bytes: [u8; 32] = hash.finalize().into();
-        let mut truncated = [0u8; 31];
-        truncated.copy_from_slice(&bytes[0..31]);
+        let mut truncated = [0u8; 32];
+        truncated.copy_from_slice(&bytes[0..32]);
         Self(truncated)
     }
 }
@@ -44,8 +44,8 @@ impl BinaryId {
     }
 }
 
-impl AsRef<[u8; 31]> for MachineId {
-    fn as_ref(&self) -> &[u8; 31] {
+impl AsRef<[u8; 32]> for MachineId {
+    fn as_ref(&self) -> &[u8; 32] {
         &self.0
     }
 }
@@ -58,13 +58,13 @@ impl AsRef<[u8; 32]> for BinaryId {
 
 crate::impl_fromstr_deserialize! {
     name => "machine id",
-    fn from_bytes(bytes: [u8;31]) -> MachineId {
+    fn from_bytes(bytes: [u8;32]) -> MachineId {
         MachineId(bytes)
     }
 }
 
 crate::impl_display_debug_serialize! {
-    fn to_bytes(machine_id: &MachineId) -> [u8;31] {
+    fn to_bytes(machine_id: &MachineId) -> [u8;32] {
         machine_id.0
     }
 }

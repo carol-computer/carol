@@ -3,12 +3,12 @@ pub use carol_core::BinaryId;
 pub use carol_http::api::{BinaryCreated, MachineCreated};
 
 pub struct Client {
-    pub base: String,
+    pub base: reqwest::Url,
     http_client: reqwest::blocking::Client,
 }
 
 impl Client {
-    pub fn new(base: String) -> Self {
+    pub fn new(base: reqwest::Url) -> Self {
         Self {
             base,
             http_client: reqwest::blocking::Client::new(), // blocking::get() does builder().build()?
@@ -52,8 +52,9 @@ impl Client {
     }
 
     fn post(&self, path: &str) -> reqwest::blocking::RequestBuilder {
+        let url = self.base.join(path).expect("path is valid");
         self.http_client
-            .post(format!("{}/{}", self.base, path))
+            .post(url)
             .header(reqwest::header::ACCEPT, "application/json")
     }
 

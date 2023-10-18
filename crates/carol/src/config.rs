@@ -78,9 +78,6 @@ pub mod dns {
         /// machine id. Also anything CNAME'd to this domain would resolve to this.
         #[serde(default)]
         pub base_domain: Option<hickory_resolver::Name>,
-        /// Passthrough requests matching this domain to the HTTP API
-        #[serde(default)]
-        pub api_host: Option<hickory_resolver::Name>,
         #[serde(default)]
         pub hickory_conf: hickory_resolver::config::ResolverConfig,
         #[serde(default)]
