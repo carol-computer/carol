@@ -39,10 +39,11 @@ impl Resolver {
 
         let host = match host_header.to_str() {
             Ok(host) => {
-                if let Ok(_) = SocketAddr::from_str(host) {
+                // If contacting an IP address etc just respond with API
+                if SocketAddr::from_str(host).is_ok() {
                     return Ok(Resolution::Api);
                 }
-                if let Some(_) = host.try_parse_ip() {
+                if host.try_parse_ip().is_some() {
                     return Ok(Resolution::Api);
                 }
                 match Name::from_str(host).ok() {

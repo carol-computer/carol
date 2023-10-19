@@ -20,13 +20,12 @@
       (system:
         let
           rustupToolchainToml = (readTomlFile ./rust-toolchain.toml).toolchain;
-
           overlays = [
             # use rust overlay to provide a rust toolchain same as rustup would
             (import rust-overlay)
             (self: super: {
               rustToolchain = (super.rust-bin.fromRustupToolchain ({
-                channel = "stable";
+                channel = "1.72.1";
               } // rustupToolchainToml));
 
               rustToolchain-nightly = (super.rust-bin.fromRustupToolchain ({

@@ -225,6 +225,7 @@ impl Handler {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn machine_components(
         &self,
         id: MachineId,
@@ -274,7 +275,7 @@ impl Handler {
                     .resolver
                     .resolve_host(host_header)
                     .await
-                    .map_err(|e| Problem::internal_server_error(e))?;
+                    .map_err(Problem::internal_server_error)?;
                 match resolution {
                     Resolution::Api => { /* carry on */ }
                     Resolution::Unknown => return Err(Problem::misdirected_request(host_header)),
