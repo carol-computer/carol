@@ -10,6 +10,7 @@ carol_core.workspace = true
 serde.workspace = true
 hyper.workspace = true
 carol_bls.workspace = true
+bech32.workspace = true
 
 [features]
 default = [ "std" ]

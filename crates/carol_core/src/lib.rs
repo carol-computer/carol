@@ -26,7 +26,10 @@ impl MachineId {
         let mut hash = Sha256::default();
         hash.update(binary_id.as_ref());
         hash.update(params);
-        Self(hash.finalize().into())
+        let bytes: [u8; 32] = hash.finalize().into();
+        let mut truncated = [0u8; 32];
+        truncated.copy_from_slice(&bytes[0..32]);
+        Self(truncated)
     }
 }
 

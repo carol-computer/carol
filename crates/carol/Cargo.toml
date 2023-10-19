@@ -20,3 +20,4 @@ carol_core = { workspace = true, features = ["std"] }
 carol_bls = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }
+hickory-resolver = { version = "0.24", features = ["dns-over-rustls", "serde-config", "tokio-runtime"], default-features = false }

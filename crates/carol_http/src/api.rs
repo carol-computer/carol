@@ -5,6 +5,7 @@ use hyper::{header, http::HeaderValue, HeaderMap, StatusCode};
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Root {
     pub static_public_key: carol_bls::PublicKey,
+    pub base_domain: Option<String>,
 }
 
 impl Response for Root {}

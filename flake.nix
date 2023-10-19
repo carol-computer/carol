@@ -20,17 +20,12 @@
       (system:
         let
           rustupToolchainToml = (readTomlFile ./rust-toolchain.toml).toolchain;
-
           overlays = [
             # use rust overlay to provide a rust toolchain same as rustup would
             (import rust-overlay)
             (self: super: {
               rustToolchain = (super.rust-bin.fromRustupToolchain ({
-                channel = "stable";
-              } // rustupToolchainToml));
-
-              rustToolchain-beta = (super.rust-bin.fromRustupToolchain ({
-                channel = "beta";
+                channel = "1.72.1";
               } // rustupToolchainToml));
 
               rustToolchain-nightly = (super.rust-bin.fromRustupToolchain ({
@@ -48,7 +43,6 @@
           src = pkgs.lib.cleanSourceWith {
             src = craneLib.path ./.;
             filter = path: type:
-              (pkgs.lib.hasInfix "/resources/" path) ||
               (pkgs.lib.hasSuffix "\.wit" path) ||
               (craneLib.filterCargoSources path type);
           };
@@ -205,12 +199,6 @@
             stable = mkShell {
               buildInputs = [
                 (rustToolchain.override {extensions = devShellToolchainExtensions;})
-              ] ++ devShellPackages;
-            };
-
-            beta = mkShell {
-              buildInputs = [
-                (rustToolchain-beta.override {extensions = devShellToolchainExtensions;})
               ] ++ devShellPackages;
             };
 

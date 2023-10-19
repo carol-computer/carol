@@ -1,8 +1,9 @@
 use super::api::{self, *};
+use super::resolver::{Resolution, Resolver};
 use crate::config;
 use anyhow::{anyhow, Context};
-use carol_core::{BinaryId, MachineId};
-use carol_host::{GuestError, State};
+use carol_core::{hex, BinaryId, MachineId};
+use carol_host::{CompiledBinary, GuestError, State};
 use hyper::http::uri::PathAndQuery;
 use hyper::http::HeaderValue;
 use hyper::service::{make_service_fn, service_fn};
@@ -70,10 +71,38 @@ impl Problem {
         )
     }
 
+    pub fn misdirected_request(host: &HeaderValue) -> Self {
+        let host = host
+            .to_str()
+            .map(|x| x.to_string())
+            .unwrap_or_else(|_| format!("hex:\"{}\"", hex::encode(host.as_bytes())));
+        Self::new(
+            format!("HOST {host} couldn't be resovled to a machine"),
+            anyhow!("HOST {host} couldn't be resovled to a machine"),
+            StatusCode::MISDIRECTED_REQUEST,
+        )
+    }
+
     pub fn not_found(path: &str) -> Self {
         Self::new(
             format!("{} not found", path),
             anyhow!("resource not found: {}", path),
+            StatusCode::NOT_FOUND,
+        )
+    }
+
+    pub fn machine_not_found(machine_id: MachineId) -> Self {
+        Self::new(
+            format!("machine {machine_id} not found"),
+            anyhow!("machine {machine_id} not found"),
+            StatusCode::NOT_FOUND,
+        )
+    }
+
+    pub fn binary_not_found(binary_id: BinaryId) -> Self {
+        Self::new(
+            format!("binary {binary_id} not found"),
+            anyhow!("binary {binary_id} not found"),
             StatusCode::NOT_FOUND,
         )
     }
@@ -134,220 +163,6 @@ fn build_response<B: api::Response>(app_response: &B) -> Response<Body> {
     response
 }
 
-pub async fn dispatch(mut req: Request<Body>, state: State) -> Result<Response<Body>, Problem> {
-    let path = req.uri().path();
-    let segments = {
-        let mut segments = path.split('/');
-        // ignore first `/`
-        let _ = segments.next();
-        segments.collect::<Vec<_>>()
-    };
-    match (req.method(), &segments[..]) {
-        (&Method::GET, [""]) => Ok(build_response(&Root {
-            static_public_key: state.bls_keypair.public_key(),
-        })),
-        (&Method::POST, ["binaries"]) => {
-            let body = slurp_request_body(&mut req).await?;
-            let binary_id = BinaryId::new(&body);
-            let already_exists = state.exec.get_binary(binary_id).is_some();
-            let span = span!(
-                Level::INFO,
-                "POST /binaries",
-                binary_id = binary_id.to_string()
-            );
-            let _enter = span.enter();
-
-            if already_exists {
-                event!(Level::DEBUG, "already existing binary ignored");
-                let mut response = build_response(&BinaryCreated { id: binary_id });
-                *response.status_mut() = StatusCode::OK;
-                Ok(response)
-            } else {
-                let compiled_binary = state
-                    .exec
-                    .executor()
-                    .load_binary_from_wasm_binary(&body)
-                    .map_err(|e| {
-                        Problem::new(
-                            format!("Invalid WASM binary with id {}: {}", binary_id, e),
-                            e,
-                            StatusCode::BAD_REQUEST,
-                        )
-                    })?;
-
-                debug_assert_eq!(compiled_binary.binary_id(), binary_id);
-                state.exec.insert_binary(compiled_binary);
-                event!(Level::INFO, "new binary uploaded");
-                Ok(build_response(&BinaryCreated { id: binary_id }))
-            }
-        }
-        (method, ["binaries", binary_id]) => {
-            let binary_id = BinaryId::from_str(binary_id)
-                .map_err(|e| Problem::invalid_path_element::<BinaryId>(e.into(), binary_id))?;
-            let binary = state
-                .exec
-                .get_binary(binary_id)
-                .ok_or(Problem::not_found(path))?;
-
-            match method {
-                &Method::GET => {
-                    let carol_host::guest::BinaryApi { activations } = state
-                        .exec
-                        .executor()
-                        .get_binary_api(&binary)
-                        .await
-                        .map_err(|e| {
-                            Problem::bad_request("failed to retrieve API from binary", e)
-                        })?;
-                    let response = build_response(&carol_http::api::BinaryDescription {
-                        activations: activations
-                            .into_iter()
-                            .map(|carol_host::guest::ActivationDescription { name }| {
-                                (name, carol_http::api::AcivationDescription {})
-                            })
-                            .collect(),
-                    });
-                    Ok(response)
-                }
-                &Method::POST => {
-                    let params = slurp_request_body(&mut req).await?;
-                    let (already_exists, machine_id) = state.exec.insert_machine(binary_id, params);
-                    let mut response = build_response(&MachineCreated { id: machine_id });
-
-                    if already_exists {
-                        *response.status_mut() = StatusCode::OK;
-                    } else {
-                        event!(
-                            Level::INFO,
-                            machine_id = machine_id.to_string(),
-                            "machine created"
-                        );
-                    }
-                    Ok(response)
-                }
-                method => Err(Problem::method_not_allowed(
-                    path,
-                    method.as_str(),
-                    &["POST", "GET"],
-                )),
-            }
-        }
-        (method, ["machines", machine_id, trailing @ ..]) => {
-            let machine_id = MachineId::from_str(machine_id)
-                .map_err(|e| Problem::invalid_path_element::<MachineId>(e.into(), machine_id))?;
-            let (binary_id, params, compiled_binary) = {
-                let (binary_id, params) = state
-                    .exec
-                    .get_machine(machine_id)
-                    .ok_or(Problem::not_found(path))?;
-                let compiled_binary = state
-                    .exec
-                    .get_binary(binary_id)
-                    .ok_or(Problem::not_found(path))?;
-                (binary_id, params, compiled_binary)
-            };
-
-            match trailing {
-                &[] => match method {
-                    &Method::GET => Ok(build_response(&GetMachine {
-                        binary_id,
-                        params: params.as_ref(),
-                    })),
-                    _ => Err(Problem::method_not_allowed(path, method.as_str(), &["GET"])),
-                },
-                ["http", inner_path @ ..] => {
-                    // we need to direct /http to /http/ so relative urls work in the machine
-                    if inner_path.is_empty() && !req.uri().path().ends_with('/') {
-                        return Ok(Response::builder()
-                            .header(header::LOCATION, "http/")
-                            .status(StatusCode::PERMANENT_REDIRECT)
-                            .body(Body::empty())
-                            .unwrap());
-                    }
-                    let transformed_uri = {
-                        let mut parts = req.uri().clone().into_parts();
-                        let mut new_paq = format!("/{}", inner_path.join("/"));
-                        if let Some(paq) = parts.path_and_query {
-                            if let Some(query) = paq.query() {
-                                new_paq.extend(["?", query]);
-                            }
-                        }
-                        let new_paq = PathAndQuery::from_str(&new_paq)
-                            .with_context(|| {
-                                format!("trying to turn {new_paq} into a path and query")
-                            })
-                            .map_err(Problem::internal_server_error)?;
-                        parts.path_and_query = Some(new_paq);
-                        Uri::from_parts(parts)
-                            .context("trying to transform request URI for machine to handle")
-                            .map_err(Problem::internal_server_error)?
-                    };
-                    *req.uri_mut() = transformed_uri;
-                    let output = state
-                        .exec
-                        .executor()
-                        .machine_handle_http_request(
-                            state.clone(),
-                            compiled_binary.as_ref(),
-                            params.as_ref(),
-                            req,
-                        )
-                        .await
-                        .map_err(Problem::internal_server_error)?
-                        .map_err(Problem::guest_error)?;
-
-                    Ok(output)
-                }
-                ["activate", activation_name] => {
-                    let activation_name = activation_name.to_string();
-                    match method {
-                        &Method::POST => {
-                            let activation_input = slurp_request_body(&mut req).await?;
-                            let output = state
-                                .exec
-                                .executor()
-                                .activate_machine(
-                                    state.clone(),
-                                    compiled_binary.as_ref(),
-                                    params.as_ref(),
-                                    &activation_name,
-                                    &activation_input,
-                                )
-                                .await
-                                .map_err(|e| {
-                                    Problem::new(
-                                        format!(
-                                            "error occurred while trying to activate machine: {}",
-                                            e
-                                        ),
-                                        e,
-                                        StatusCode::INTERNAL_SERVER_ERROR,
-                                    )
-                                })?
-                                .map_err(|e| {
-                                    Problem::new(
-                                        format!("machine failed to complete activation: {}", e),
-                                        e.into(),
-                                        StatusCode::BAD_REQUEST,
-                                    )
-                                })?;
-                            Ok(Response::new(Body::from(output)))
-                        }
-                        method => Err(Problem::method_not_allowed(
-                            path,
-                            method.as_str(),
-                            &["POST"],
-                        )),
-                    }
-                }
-                _ => Err(Problem::not_found(path)),
-            }
-        }
-        (method, ["machines"]) => Err(Problem::method_not_allowed(path, method.as_str(), &[])),
-        _ => Err(Problem::not_found(path)),
-    }
-}
-
 async fn slurp_request_body(req: &mut Request<Body>) -> Result<Vec<u8>, Problem> {
     let body_stream = req.body_mut();
     let mut buf = Vec::with_capacity(body_stream.size_hint().upper().unwrap_or(0) as usize);
@@ -371,45 +186,25 @@ async fn slurp_request_body(req: &mut Request<Body>) -> Result<Vec<u8>, Problem>
 #[derive(Clone)]
 pub struct Handler {
     state: State,
-    resource_map: Arc<HashMap<String, Vec<u8>>>,
+    resolver: Resolver,
 }
 
 impl Handler {
     async fn handle(self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        if let Some(resource_path) = req.uri().path().strip_prefix("/resources/") {
-            return self.handle_resource_request(resource_path).await;
-        }
-        self._handle(req).await
-    }
-    async fn handle_resource_request(self, path: &str) -> Result<Response<Body>, Infallible> {
-        let span = span!(Level::DEBUG, "resource handler", resource = path);
-        let _enter = span.enter();
-        match self.resource_map.get(path) {
-            Some(resource) => {
-                event!(Level::DEBUG, "resource found");
-                let mut res = Response::builder().status(200);
-                if path.ends_with(".css") {
-                    res = res.header("Content-Type", "text/css");
-                }
-                Ok(res.body(Body::from(resource.clone())).expect("infallible"))
-            }
-            None => {
-                event!(Level::INFO, "resource not found");
-                Ok(Response::builder()
-                    .status(404)
-                    .body(Body::empty())
-                    .expect("infallible"))
-            }
-        }
-    }
-    async fn _handle(self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+        let host = req
+            .headers()
+            .get(header::HOST)
+            .and_then(|host| host.to_str().ok())
+            .unwrap_or("<unable-to-decode>");
         let span = span!(
             Level::INFO,
             "HTTP",
             method = req.method().as_str(),
-            uri = req.uri().to_string()
+            uri = req.uri().to_string(),
+            host = host,
         );
-        match dispatch(req, self.state).instrument(span.clone()).await {
+
+        match self.dispatch(req).instrument(span.clone()).await {
             Ok(res) => Ok(res),
             Err(problem) => {
                 let _enter = span.enter();
@@ -429,34 +224,276 @@ impl Handler {
             }
         }
     }
+
+    #[allow(clippy::type_complexity)]
+    fn machine_components(
+        &self,
+        id: MachineId,
+    ) -> Result<(BinaryId, Arc<Vec<u8>>, Arc<CompiledBinary>), Problem> {
+        let (binary_id, params) = self
+            .state
+            .exec
+            .get_machine(id)
+            .ok_or(Problem::machine_not_found(id))?;
+        let compiled_binary = self
+            .state
+            .exec
+            .get_binary(binary_id)
+            .ok_or(Problem::binary_not_found(binary_id))?;
+        Ok((binary_id, params, compiled_binary))
+    }
+
+    async fn http_request_to_machine(
+        &self,
+        id: MachineId,
+        request: Request<Body>,
+    ) -> Result<Response<Body>, Problem> {
+        let (_, params, compiled_binary) = self.machine_components(id)?;
+        let output = self
+            .state
+            .exec
+            .executor()
+            .machine_handle_http_request(
+                self.state.clone(),
+                compiled_binary.as_ref(),
+                params.as_ref(),
+                request,
+            )
+            .await
+            .map_err(Problem::internal_server_error)?
+            .map_err(Problem::guest_error)?;
+
+        Ok(output)
+    }
+
+    pub async fn dispatch(&self, mut req: Request<Body>) -> Result<Response<Body>, Problem> {
+        let state = &self.state;
+
+        match req.headers().get(header::HOST) {
+            Some(host_header) => {
+                let resolution = self
+                    .resolver
+                    .resolve_host(host_header)
+                    .await
+                    .map_err(Problem::internal_server_error)?;
+                match resolution {
+                    Resolution::Api => { /* carry on */ }
+                    Resolution::Unknown => return Err(Problem::misdirected_request(host_header)),
+                    Resolution::Machine(machine_id) => {
+                        return self.http_request_to_machine(machine_id, req).await
+                    }
+                }
+            }
+            None => { /* assume it's for API */ }
+        }
+
+        let path = req.uri().path();
+
+        let segments = {
+            let mut segments = path.split('/');
+            // ignore first `/`
+            let _ = segments.next();
+            segments.collect::<Vec<_>>()
+        };
+
+        match (req.method(), &segments[..]) {
+            (&Method::GET, [""]) => Ok(build_response(&Root {
+                static_public_key: state.bls_keypair.public_key(),
+                base_domain: self.resolver.base_domain().map(ToString::to_string),
+            })),
+            (&Method::POST, ["binaries"]) => {
+                let body = slurp_request_body(&mut req).await?;
+                let binary_id = BinaryId::new(&body);
+                let already_exists = state.exec.get_binary(binary_id).is_some();
+                let span = span!(
+                    Level::INFO,
+                    "POST /binaries",
+                    binary_id = binary_id.to_string()
+                );
+                let _enter = span.enter();
+
+                if already_exists {
+                    event!(Level::DEBUG, "already existing binary ignored");
+                    let mut response = build_response(&BinaryCreated { id: binary_id });
+                    *response.status_mut() = StatusCode::OK;
+                    Ok(response)
+                } else {
+                    let compiled_binary = state
+                        .exec
+                        .executor()
+                        .load_binary_from_wasm_binary(&body)
+                        .map_err(|e| {
+                            Problem::new(
+                                format!("Invalid WASM binary with id {}: {}", binary_id, e),
+                                e,
+                                StatusCode::BAD_REQUEST,
+                            )
+                        })?;
+
+                    debug_assert_eq!(compiled_binary.binary_id(), binary_id);
+                    state.exec.insert_binary(compiled_binary);
+                    event!(Level::INFO, "new binary uploaded");
+                    Ok(build_response(&BinaryCreated { id: binary_id }))
+                }
+            }
+            (method, ["binaries", binary_id]) => {
+                let binary_id = BinaryId::from_str(binary_id)
+                    .map_err(|e| Problem::invalid_path_element::<BinaryId>(e.into(), binary_id))?;
+                let binary = state
+                    .exec
+                    .get_binary(binary_id)
+                    .ok_or(Problem::binary_not_found(binary_id))?;
+
+                match method {
+                    &Method::GET => {
+                        let carol_host::guest::BinaryApi { activations } = state
+                            .exec
+                            .executor()
+                            .get_binary_api(&binary)
+                            .await
+                            .map_err(|e| {
+                                Problem::bad_request("failed to retrieve API from binary", e)
+                            })?;
+                        let response = build_response(&carol_http::api::BinaryDescription {
+                            activations: activations
+                                .into_iter()
+                                .map(|carol_host::guest::ActivationDescription { name }| {
+                                    (name, carol_http::api::AcivationDescription {})
+                                })
+                                .collect(),
+                        });
+                        Ok(response)
+                    }
+                    &Method::POST => {
+                        let params = slurp_request_body(&mut req).await?;
+                        let (already_exists, machine_id) =
+                            state.exec.insert_machine(binary_id, params);
+                        let mut response = build_response(&MachineCreated { id: machine_id });
+
+                        if already_exists {
+                            *response.status_mut() = StatusCode::OK;
+                        } else {
+                            event!(
+                                Level::INFO,
+                                machine_id = machine_id.to_string(),
+                                "machine created"
+                            );
+                        }
+                        Ok(response)
+                    }
+                    method => Err(Problem::method_not_allowed(
+                        path,
+                        method.as_str(),
+                        &["POST", "GET"],
+                    )),
+                }
+            }
+            (method, ["machines", machine_id, trailing @ ..]) => {
+                let machine_id = MachineId::from_str(machine_id).map_err(|e| {
+                    Problem::invalid_path_element::<MachineId>(e.into(), machine_id)
+                })?;
+
+                match trailing {
+                    &[] => match method {
+                        &Method::GET => {
+                            let (binary_id, params, _) = self.machine_components(machine_id)?;
+                            Ok(build_response(&GetMachine {
+                                binary_id,
+                                params: params.as_ref(),
+                            }))
+                        }
+                        _ => Err(Problem::method_not_allowed(path, method.as_str(), &["GET"])),
+                    },
+                    ["http", inner_path @ ..] => {
+                        // we need to direct /http to /http/ so relative urls work in the machine
+                        if inner_path.is_empty() && !req.uri().path().ends_with('/') {
+                            return Ok(Response::builder()
+                                .header(header::LOCATION, "http/")
+                                .status(StatusCode::PERMANENT_REDIRECT)
+                                .body(Body::empty())
+                                .unwrap());
+                        }
+                        let transformed_uri = {
+                            let mut parts = req.uri().clone().into_parts();
+                            let mut new_paq = format!("/{}", inner_path.join("/"));
+                            if let Some(paq) = parts.path_and_query {
+                                if let Some(query) = paq.query() {
+                                    new_paq.extend(["?", query]);
+                                }
+                            }
+                            let new_paq = PathAndQuery::from_str(&new_paq)
+                                .with_context(|| {
+                                    format!("trying to turn {new_paq} into a path and query")
+                                })
+                                .map_err(Problem::internal_server_error)?;
+                            parts.path_and_query = Some(new_paq);
+                            Uri::from_parts(parts)
+                                .context("trying to transform request URI for machine to handle")
+                                .map_err(Problem::internal_server_error)?
+                        };
+                        *req.uri_mut() = transformed_uri;
+
+                        self.http_request_to_machine(machine_id, req).await
+                    }
+                    ["activate", activation_name] => {
+                        let (_, params, compiled_binary) = self.machine_components(machine_id)?;
+                        let activation_name = activation_name.to_string();
+                        match method {
+                            &Method::POST => {
+                                let activation_input = slurp_request_body(&mut req).await?;
+                                let output = state
+                                    .exec
+                                    .executor()
+                                    .activate_machine(
+                                        state.clone(),
+                                        compiled_binary.as_ref(),
+                                        params.as_ref(),
+                                        &activation_name,
+                                        &activation_input,
+                                    )
+                                    .await
+                                    .map_err(|e| {
+                                        Problem::new(
+                                            format!(
+                                                "error occurred while trying to activate machine: {}",
+                                                e
+                                            ),
+                                            e,
+                                            StatusCode::INTERNAL_SERVER_ERROR,
+                                        )
+                                    })?
+                                    .map_err(|e| {
+                                        Problem::new(
+                                            format!("machine failed to complete activation: {}", e),
+                                            e.into(),
+                                            StatusCode::BAD_REQUEST,
+                                        )
+                                    })?;
+                                Ok(Response::new(Body::from(output)))
+                            }
+                            method => Err(Problem::method_not_allowed(
+                                path,
+                                method.as_str(),
+                                &["POST"],
+                            )),
+                        }
+                    }
+                    _ => Err(Problem::not_found(path)),
+                }
+            }
+            (method, ["machines"]) => Err(Problem::method_not_allowed(path, method.as_str(), &[])),
+            _ => Err(Problem::not_found(path)),
+        }
+    }
 }
 
 pub fn start(
     config: config::HttpServerConfig,
     state: State,
 ) -> anyhow::Result<(SocketAddr, impl Future<Output = ()> + Send + Sync + 'static)> {
-    let mut resource_map: HashMap<String, Vec<u8>> = config
-        .resources
-        .into_iter()
-        .map(|(uri_path, file_path)| {
-            Ok((
-                uri_path,
-                std::fs::read(&file_path)
-                    .context(format!("trying to read {}", file_path.display()))?,
-            ))
-        })
-        .collect::<anyhow::Result<_>>()?;
-
-    resource_map
-        .entry("guest-default.css".into())
-        .or_insert_with(|| {
-            event!(Level::DEBUG, "using guest-default.css from carol build");
-            include_bytes!("../../resources/guest-default.css").to_vec()
-        });
-    let resource_map = Arc::new(resource_map);
     let handler = Handler {
         state,
-        resource_map,
+        resolver: config.dns.into_resolver(),
     };
 
     // And a MakeService to handle each connection...

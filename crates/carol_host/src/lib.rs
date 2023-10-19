@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_closure_call)]
 mod host_bindings;
 mod state;
 pub use state::*;
