@@ -46,7 +46,7 @@ After developing a machine we want to deploy we can run it on a public carol ser
 
 
 ``` shell
-carol create --carol-url https://carol.computer
+carlo create --carol-url https://carol.computer
 ```
 
 This will output a url to the machine you just created.
