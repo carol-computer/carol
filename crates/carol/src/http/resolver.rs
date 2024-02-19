@@ -54,6 +54,10 @@ impl Resolver {
             Err(_) => return Ok(Resolution::Unknown),
         };
 
+        if host.is_localhost() {
+            return Ok(Resolution::Api);
+        }
+
         if Some(&host) == self.base_domain.as_ref() {
             return Ok(Resolution::Api);
         }
