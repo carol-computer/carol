@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::{collections::HashSet, net::SocketAddr, str::FromStr};
 
 use carol_core::MachineId;
 use hickory_resolver::{
@@ -11,6 +11,7 @@ use hyper::http::HeaderValue;
 #[derive(Clone)]
 pub struct Resolver {
     inner: TokioAsyncResolver,
+    passthrough: HashSet<Name>,
     base_domain: Option<Name>,
 }
 
@@ -28,6 +29,7 @@ impl Resolver {
     pub fn new(config: crate::config::dns::Config) -> Self {
         Self {
             inner: TokioAsyncResolver::tokio(config.hickory_conf, config.hickory_opts),
+            passthrough: config.ignore_hosts.into_iter().collect(),
             base_domain: config.base_domain,
         }
     }
@@ -54,7 +56,7 @@ impl Resolver {
             Err(_) => return Ok(Resolution::Unknown),
         };
 
-        if host.is_localhost() {
+        if host.is_localhost() || self.passthrough.contains(&host) {
             return Ok(Resolution::Api);
         }
 
